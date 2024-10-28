@@ -151,7 +151,7 @@ async def proxy(client_ws, path):
                         print("sent message")
                         
                 except json.JSONDecodeError:
-                    print('Was not able to parse Deepgram response as JSON')
+                    print('Was not able to parse Deepgram response as JSON.')
                     continue
 
         async def client_receiver(client_ws):
