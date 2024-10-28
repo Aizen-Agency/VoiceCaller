@@ -1,0 +1,8 @@
+asyncio
+websockets
+requests
+openai
+python-dotenv
+uuid
+elevenlabs
+pydub
