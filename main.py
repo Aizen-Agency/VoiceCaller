@@ -99,7 +99,7 @@ async def get_openai_response(transcript, streamSid):
         return response     
     
     except Exception as e:
-        print(f"Error in OpenAI API call:  {e}")
+        print(f"Error in OpenAI API call: {e}")
         return "Sorry, I couldn't process the response."
 
 async def proxy(client_ws, path):
