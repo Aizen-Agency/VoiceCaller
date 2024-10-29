@@ -171,10 +171,6 @@ async def proxy(client_ws, path):
                             conversation_history_map[streamSid] = [ {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}]
                         continue
                     if data["event"] == "media":
-                        await client_ws.send(json.dumps({ 
-                            "event": "clear",
-                            "streamSid": streamSid,
-                            }))
                         media = data["media"]
                         chunk = base64.b64decode(media["payload"])
                         time_increment = len(chunk) / 8000.0
