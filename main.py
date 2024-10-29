@@ -95,8 +95,7 @@ async def get_openai_response(transcript, streamSid):
             if chunk.choices[0].delta.content is not None:
                 response += chunk.choices[0].delta.content
         
-        conversation_history_map[streamSid].append({"role": "assistant", "content": response})  
-        print(conversation_history_map)      
+        conversation_history_map[streamSid].append({"role": "assistant", "content": response})      
         return response     
     
     except Exception as e:
@@ -182,7 +181,6 @@ async def proxy(client_ws, path):
                     if data["event"] == "stop":
                         streamSid = data['streamSid']
                         del conversation_history_map[streamSid]
-                        print(conversation_history_map)
                         break
 
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
@@ -201,6 +199,7 @@ async def proxy(client_ws, path):
         ])
 
         await client_ws.close()
+        del conversation_history_map[streamSid]
         print('Finished running the proxy')
 
 # async def main():
