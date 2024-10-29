@@ -109,6 +109,7 @@ async def proxy(client_ws, path):
     conn_start = time.time()
 
     streamSid = ""
+    prompt_count = 0
     
     async with deepgram_connect() as deepgram_ws:
         async def deepgram_sender(deepgram_ws):
@@ -118,12 +119,14 @@ async def proxy(client_ws, path):
 
         async def deepgram_receiver(deepgram_ws):
             nonlocal audio_cursor
+            nonlocal prompt_count
             async for message in deepgram_ws:
                 try:
                     dg_json = json.loads(message)
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
                     if transcript:
                         # Get response from OpenAI API
+                        prompt_count = prompt_count + 1
                         response = await get_openai_response(transcript, streamSid)
                         payload =  text_to_speech_base64(response)
                         try:
@@ -182,7 +185,11 @@ async def proxy(client_ws, path):
                         streamSid = data['streamSid']
                         del conversation_history_map[streamSid]
                         break
-
+                    
+                    if data["event"] == "mark": 
+                        prompt_count =prompt_count - 1
+                        print(prompt_count)
+                    
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
                         outbox.put_nowait(buffer)
                         buffer = bytearray(b'')
