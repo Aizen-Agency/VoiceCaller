@@ -181,14 +181,16 @@ async def proxy(client_ws, path):
                         buffer.extend(chunk)
                         if chunk == b'':
                             empty_byte_received = True
+                                
+                    if data["event"] == "mark": 
+                        print(data["event"])
+                        prompt_count =prompt_count - 1
+                        print(prompt_count)
+                        
                     if data["event"] == "stop":
                         streamSid = data['streamSid']
                         del conversation_history_map[streamSid]
                         break
-                    
-                    if data["event"] == "mark": 
-                        prompt_count =prompt_count - 1
-                        print(prompt_count)
                     
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
                         outbox.put_nowait(buffer)
