@@ -126,7 +126,7 @@ async def proxy(client_ws, path):
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
                     if transcript:
                         # Get response from OpenAI API
-                        prompt_count = prompt_count + 1
+                        prompt_count += 1
                         response = await get_openai_response(transcript, streamSid)
                         payload =  text_to_speech_base64(response)
                         try:
@@ -162,6 +162,7 @@ async def proxy(client_ws, path):
         async def client_receiver(client_ws):
             nonlocal streamSid 
             nonlocal audio_cursor
+            nonlocal prompt_count
             BUFFER_SIZE = 20 * 160
             buffer = bytearray(b'')
             empty_byte_received = False
@@ -183,9 +184,12 @@ async def proxy(client_ws, path):
                             empty_byte_received = True
                                 
                     if data["event"] == "mark": 
-                        print(data["event"])
-                        prompt_count =prompt_count - 1
-                        print(prompt_count)
+                        try: 
+                            print(data["event"])
+                            prompt_count -= 1
+                            print(prompt_count)
+                        except Exception as e:
+                            print(e)
                         
                     if data["event"] == "stop":
                         streamSid = data['streamSid']
