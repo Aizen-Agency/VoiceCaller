@@ -127,7 +127,6 @@ async def proxy(client_ws, path):
                     if transcript:
                         # Get response from OpenAI API
                         prompt_count += 1
-                        print(prompt_count)
                         if prompt_count > 1:
                              await client_ws.send(json.dumps({ 
                                     "event": "clear",
@@ -192,7 +191,6 @@ async def proxy(client_ws, path):
                                 
                     if data["event"] == "mark": 
                         try: 
-                            print(data["event"])
                             prompt_count -= 1
                         except Exception as e:
                             print(e)
