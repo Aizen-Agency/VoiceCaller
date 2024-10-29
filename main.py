@@ -110,6 +110,8 @@ async def proxy(client_ws, path):
 
     streamSid = ""
     
+    response_completed = False
+    
     async with deepgram_connect() as deepgram_ws:
         async def deepgram_sender(deepgram_ws):
             while True:
@@ -151,10 +153,11 @@ async def proxy(client_ws, path):
                             print("Error sending message: ", e)
                         
                         print("sent message")
-                        await client_ws.send(json.dumps({ 
-                            "event": "clear",
-                            "streamSid": streamSid,
-                            }))
+                        
+                        # await client_ws.send(json.dumps({ 
+                        #     "event": "clear",
+                        #     "streamSid": streamSid,
+                        #     }))
                         
                 except json.JSONDecodeError:
                     print('Was not able to parse Deepgram response as JSON.')
@@ -175,7 +178,7 @@ async def proxy(client_ws, path):
                             conversation_history_map[streamSid] = [ {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}]
                         continue
                     if data["event"] == "media":
-                        
+                        response_completed = False
                         media = data["media"]
                         chunk = base64.b64decode(media["payload"])
                         time_increment = len(chunk) / 8000.0
@@ -190,6 +193,7 @@ async def proxy(client_ws, path):
                     if data["event"] == "mark":
                         print(data['event'])
                         print(data['mark']['name'])
+                        response_completed = True
 
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
                         outbox.put_nowait(buffer)
