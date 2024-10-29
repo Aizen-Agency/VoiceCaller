@@ -193,8 +193,10 @@ async def proxy(client_ws, path):
                         del conversation_history_map[streamSid]
                         break
                     if data["event"] == "mark": 
+                        print(data["event"])
                         prompt_count = prompt_count - 1
                         print(prompt_count)
+                        print(data["mark"]["name"])
 
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
                         outbox.put_nowait(buffer)
