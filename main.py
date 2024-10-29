@@ -110,7 +110,7 @@ async def proxy(client_ws, path):
 
     streamSid = ""
     
-    response_completed = False
+    prompt_count = 0
     
     async with deepgram_connect() as deepgram_ws:
         async def deepgram_sender(deepgram_ws):
@@ -128,6 +128,13 @@ async def proxy(client_ws, path):
                         # Get response from OpenAI API
                         response = await get_openai_response(transcript, streamSid)
                         payload =  text_to_speech_base64(response)
+                        
+                        if prompt_count > 1:
+                            await client_ws.send(json.dumps({ 
+                                "event": "clear",
+                                "streamSid": streamSid,
+                                }))
+                        
                         try:
                             
                            await client_ws.send(json.dumps({
@@ -154,10 +161,6 @@ async def proxy(client_ws, path):
                         
                         print("sent message")
                         
-                        # await client_ws.send(json.dumps({ 
-                        #     "event": "clear",
-                        #     "streamSid": streamSid,
-                        #     }))
                         
                 except json.JSONDecodeError:
                     print('Was not able to parse Deepgram response as JSON.')
@@ -178,7 +181,7 @@ async def proxy(client_ws, path):
                             conversation_history_map[streamSid] = [ {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}]
                         continue
                     if data["event"] == "media":
-                        response_completed = False
+                        prompt_count += 1
                         media = data["media"]
                         chunk = base64.b64decode(media["payload"])
                         time_increment = len(chunk) / 8000.0
@@ -193,7 +196,7 @@ async def proxy(client_ws, path):
                     if data["event"] == "mark":
                         print(data['event'])
                         print(data['mark']['name'])
-                        response_completed = True
+                        prompt_count -= 1
 
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
                         outbox.put_nowait(buffer)
