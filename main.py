@@ -144,7 +144,7 @@ async def proxy(client_ws, path):
                                 "event": "mark",
                                 "streamSid": streamSid,
                                 "mark": {
-                                "name": "response_ends"
+                                "name":f"mark {streamSid}"
                                 }
                                 }))
                         except Exception as e:
@@ -171,6 +171,10 @@ async def proxy(client_ws, path):
                             conversation_history_map[streamSid] = [ {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}]
                         continue
                     if data["event"] == "media":
+                        await client_ws.send(json.dumps({ 
+                            "event": "clear",
+                            "streamSid": streamSid,
+                            }))
                         media = data["media"]
                         chunk = base64.b64decode(media["payload"])
                         time_increment = len(chunk) / 8000.0
@@ -182,6 +186,8 @@ async def proxy(client_ws, path):
                         streamSid = data['streamSid']
                         del conversation_history_map[streamSid]
                         break
+                    if data["event"] == "mark":
+                        print(data['event'])
 
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
                         outbox.put_nowait(buffer)
