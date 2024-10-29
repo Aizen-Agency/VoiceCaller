@@ -99,7 +99,7 @@ async def get_openai_response(transcript, streamSid):
         return response     
     
     except Exception as e:
-        print(f"Error in OpenAI API call: {e}")
+        print(f"Error in OpenAI API call:  {e}")
         return "Sorry, I couldn't process the response."
 
 async def proxy(client_ws, path):
@@ -109,7 +109,6 @@ async def proxy(client_ws, path):
     conn_start = time.time()
 
     streamSid = ""
-    prompt_count = 0
     
     async with deepgram_connect() as deepgram_ws:
         async def deepgram_sender(deepgram_ws):
@@ -127,8 +126,8 @@ async def proxy(client_ws, path):
                         # Get response from OpenAI API
                         response = await get_openai_response(transcript, streamSid)
                         payload =  text_to_speech_base64(response)
-                        prompt_count = prompt_count + 1
                         try:
+                            
                            await client_ws.send(json.dumps({
                             "event": "media",
                             "streamSid": streamSid,
@@ -145,7 +144,7 @@ async def proxy(client_ws, path):
                                 "event": "mark",
                                 "streamSid": streamSid,
                                 "mark": {
-                                "name":f"mark {streamSid}"
+                                "name": "response_ends"
                                 }
                                 }))
                         except Exception as e:
@@ -160,7 +159,6 @@ async def proxy(client_ws, path):
         async def client_receiver(client_ws):
             nonlocal streamSid 
             nonlocal audio_cursor
-            nonlocal prompt_count
             BUFFER_SIZE = 20 * 160
             buffer = bytearray(b'')
             empty_byte_received = False
@@ -184,11 +182,6 @@ async def proxy(client_ws, path):
                         streamSid = data['streamSid']
                         del conversation_history_map[streamSid]
                         break
-                    if data["event"] == "mark": 
-                        print(data["event"])
-                        prompt_count = prompt_count - 1
-                        print(prompt_count)
-                        print(data["mark"]["name"])
 
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
                         outbox.put_nowait(buffer)
