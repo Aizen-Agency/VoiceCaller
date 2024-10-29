@@ -78,22 +78,25 @@ def deepgram_connect():
     )
     return deepgram_ws
 
-async def get_openai_response(transcript):
+
+conversation_history_map = {}
+
+async def get_openai_response(transcript, streamSid):
     try:
         
+        conversation_history_map[streamSid].append({"role": "user", "content": transcript})
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."},
-                {"role": "user", "content": transcript}
-            ],
+            messages=conversation_history_map[streamSid],
             stream=True,
         )
         response = ""
         for chunk in stream:
             if chunk.choices[0].delta.content is not None:
                 response += chunk.choices[0].delta.content
-                
+        
+        conversation_history_map[streamSid].append({"role": "assistant", "content": response})  
+        print(conversation_history_map)      
         return response     
     
     except Exception as e:
@@ -122,7 +125,7 @@ async def proxy(client_ws, path):
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
                     if transcript:
                         # Get response from OpenAI API
-                        response = await get_openai_response(transcript)
+                        response = await get_openai_response(transcript, streamSid)
                         payload =  text_to_speech_base64(response)
                         try:
                             
@@ -166,6 +169,7 @@ async def proxy(client_ws, path):
                     if data["event"] in ("connected", "start"):
                         if data['event'] in ("start"):
                             streamSid = data['streamSid']
+                            conversation_history_map[streamSid] = [ {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}]
                         continue
                     if data["event"] == "media":
                         media = data["media"]
@@ -176,6 +180,9 @@ async def proxy(client_ws, path):
                         if chunk == b'':
                             empty_byte_received = True
                     if data["event"] == "stop":
+                        streamSid = data['streamSid']
+                        del conversation_history_map[streamSid]
+                        print(conversation_history_map)
                         break
 
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
