@@ -110,8 +110,6 @@ async def proxy(client_ws, path):
 
     streamSid = ""
     
-    prompt_count = 0
-    
     async with deepgram_connect() as deepgram_ws:
         async def deepgram_sender(deepgram_ws):
             while True:
@@ -120,7 +118,6 @@ async def proxy(client_ws, path):
 
         async def deepgram_receiver(deepgram_ws):
             nonlocal audio_cursor
-            nonlocal prompt_count
             async for message in deepgram_ws:
                 try:
                     dg_json = json.loads(message)
@@ -129,15 +126,6 @@ async def proxy(client_ws, path):
                         # Get response from OpenAI API
                         response = await get_openai_response(transcript, streamSid)
                         payload =  text_to_speech_base64(response)
-                        
-                        print("here")
-                        print(prompt_count)
-                        if prompt_count > 1:
-                            await client_ws.send(json.dumps({ 
-                                "event": "clear",
-                                "streamSid": streamSid,
-                                }))
-                        
                         try:
                             
                            await client_ws.send(json.dumps({
@@ -164,7 +152,6 @@ async def proxy(client_ws, path):
                         
                         print("sent message")
                         
-                        
                 except json.JSONDecodeError:
                     print('Was not able to parse Deepgram response as JSON.')
                     continue
@@ -172,7 +159,6 @@ async def proxy(client_ws, path):
         async def client_receiver(client_ws):
             nonlocal streamSid 
             nonlocal audio_cursor
-            nonlocal prompt_count
             BUFFER_SIZE = 20 * 160
             buffer = bytearray(b'')
             empty_byte_received = False
@@ -185,7 +171,14 @@ async def proxy(client_ws, path):
                             conversation_history_map[streamSid] = [ {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}]
                         continue
                     if data["event"] == "media":
-                        prompt_count = prompt_count + 1
+                        await client_ws.send(json.dumps({ 
+                                "event": "mark",
+                                "sequenceNumber": "4",
+                                "streamSid": streamSid,
+                                "mark": {
+                                "name": "my label"
+                                }
+                                }))
                         media = data["media"]
                         chunk = base64.b64decode(media["payload"])
                         time_increment = len(chunk) / 8000.0
@@ -197,10 +190,7 @@ async def proxy(client_ws, path):
                         streamSid = data['streamSid']
                         del conversation_history_map[streamSid]
                         break
-                    if data["event"] == "mark":
-                        print(data['event'])
-                        print(data['mark']['name'])
-                        prompt_count = prompt_count - 1
+                    
 
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
                         outbox.put_nowait(buffer)
