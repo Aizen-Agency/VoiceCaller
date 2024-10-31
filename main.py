@@ -237,7 +237,6 @@ async def proxy(client_ws, path):
                         time_increment = len(chunk) / 8000.0
                         audio_cursor += time_increment
                         buffer.extend(chunk)
-                        print(f"chunk here: {chunk}")
                         if chunk == b'':
                             empty_byte_received = True
                                 
