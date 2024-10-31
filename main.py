@@ -145,18 +145,30 @@ async def proxy(client_ws, path):
                                     }))
                                 except Exception as e:
                                         print("Error sending message:", e)
+                                        
+                                try:
+                                    await client_ws.send(json.dumps({ 
+                                        "event": "mark",
+                                        "streamSid": streamSid,
+                                        "mark": {
+                                        "name": "response_ends"
+                                        }
+                                        }))
+                                except Exception as e:
+                                    print("Error sending message: ", e)
                             
+                        
                         try:
                             await client_ws.send(json.dumps({ 
                                 "event": "mark",
                                 "streamSid": streamSid,
                                 "mark": {
-                                "name": "response_ends"
+                                "name": "prompt_ends"
                                 }
                                 }))
                         except Exception as e:
                             print("Error sending message: ", e)
-                        
+                            
                         print("sent message")
                         
                 except json.JSONDecodeError:
@@ -189,7 +201,8 @@ async def proxy(client_ws, path):
                                 
                     if data["event"] == "mark": 
                         try: 
-                            prompt_count -= 1
+                            if data["mark"]["name"] == "prompt_ends":
+                                prompt_count -= 1
                         except Exception as e:
                             print(e)
                         
