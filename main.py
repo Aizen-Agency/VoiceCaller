@@ -145,14 +145,16 @@ async def proxy(client_ws, path):
                             payload =  text_to_speech_base64(chunk)
                             try:
                                 
-                                await client_ws.send(json.dumps({
+                                print("m1")
+                                client_ws.send(json.dumps({
                                     "event": "media",
                                     "streamSid": streamSid,
                                     "media": {
                                         "payload": payload
                                     }
                                 }))
-                                await client_ws.send(json.dumps({ 
+                                print("m2")
+                                client_ws.send(json.dumps({ 
                                         "event": "mark",
                                         "streamSid": streamSid,
                                         "mark": {
@@ -163,7 +165,7 @@ async def proxy(client_ws, path):
                                 print("Error sending message:", e)
                                 
                         try:  
-                            await client_ws.send(json.dumps({ 
+                            client_ws.send(json.dumps({ 
                                     "event": "mark",
                                     "streamSid": streamSid,
                                     "mark": {
