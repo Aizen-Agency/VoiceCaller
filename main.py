@@ -126,7 +126,6 @@ async def get_openai_response(transcript, streamSid):
 
                 if mid_response_count > 9:
                     mid_response_count = 0
-                    await asyncio.sleep(0.5)
                     yield mid_response  # Yield each chunk immediately
                     mid_response = ""
 
@@ -173,7 +172,6 @@ async def proxy(client_ws, path):
                                     "streamSid": streamSid,
                                     }))
                             prompt_count = 0
-                            await asyncio.sleep(2)
                             print("unsetting flag")
                             unset_break(streamSid=streamSid)
                     
@@ -181,8 +179,6 @@ async def proxy(client_ws, path):
                             print("got chunk from gpt")
                             payload =  text_to_speech_base64(chunk)
                             try:
-                                print("Waiting for any interruption")
-                                await asyncio.sleep(3)
                                 if break_flags[streamSid].is_set():
                                     print("Breaking the loop as requested in other for.")
                                     break
