@@ -80,10 +80,23 @@ def deepgram_connect():
 
 
 conversation_history_map = {}
+break_flags = {}
+
+# Function to set the break flag
+def trigger_break(streamSid):
+    if streamSid in break_flags:
+        break_flags[streamSid].set()
 
 async def get_openai_response(transcript, streamSid):
     try:
+        # Initialize the flag for this streamSid if it doesn't exist
+        if streamSid not in break_flags:
+            break_flags[streamSid] = asyncio.Event()
+
+        # Append user message to the conversation history
         conversation_history_map[streamSid].append({"role": "user", "content": transcript})
+        
+        # Initialize the stream
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=conversation_history_map[streamSid],
@@ -94,22 +107,31 @@ async def get_openai_response(transcript, streamSid):
         mid_response = ""
         mid_response_count = 0
         for chunk in stream:
+            # Check if the break flag is set
+            if break_flags[streamSid].is_set():
+                print("Breaking the loop as requested.")
+                break
+
+            # Process the stream chunk
             if chunk.choices[0].delta.content is not None:
                 delta = chunk.choices[0].delta.content
                 response += delta
                 mid_response += delta
                 mid_response_count += 1
+
                 if mid_response_count > 4:
                     mid_response_count = 0
-                    yield mid_response  # Yield each chunk immediately to enable streaming
+                    yield mid_response  # Yield each chunk immediately
                     mid_response = ""
 
+        # Append the assistant's response to the conversation history
         conversation_history_map[streamSid].append({"role": "assistant", "content": response})
         
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
         yield "Sorry, I couldn't process the response."
-
+        
+        
 async def proxy(client_ws, path):
     outbox = asyncio.Queue()
 
@@ -135,7 +157,9 @@ async def proxy(client_ws, path):
                     if transcript:
                         # Get response from OpenAI API
                         if prompt_count > 1:
-                             await client_ws.send(json.dumps({ 
+                            print("got another message.")
+                            trigger_break(streamSid=streamSid)
+                            await client_ws.send(json.dumps({ 
                                     "event": "clear",
                                     "streamSid": streamSid,
                                     }))
