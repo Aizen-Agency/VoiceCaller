@@ -146,7 +146,7 @@ async def proxy(client_ws, path):
                             try:
                                 
                                 print("m1")
-                                client_ws.send(json.dumps({
+                                await client_ws.send(json.dumps({
                                     "event": "media",
                                     "streamSid": streamSid,
                                     "media": {
@@ -154,7 +154,7 @@ async def proxy(client_ws, path):
                                     }
                                 }))
                                 print("m2")
-                                client_ws.send(json.dumps({ 
+                                await client_ws.send(json.dumps({ 
                                         "event": "mark",
                                         "streamSid": streamSid,
                                         "mark": {
@@ -165,7 +165,7 @@ async def proxy(client_ws, path):
                                 print("Error sending message:", e)
                                 
                         try:  
-                            client_ws.send(json.dumps({ 
+                            await client_ws.send(json.dumps({ 
                                     "event": "mark",
                                     "streamSid": streamSid,
                                     "mark": {
