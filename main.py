@@ -134,6 +134,7 @@ async def proxy(client_ws, path):
                     print("1111")
                     dg_json = json.loads(message)
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
+                    print(f"transcript here : {transcript}")
                     if transcript:
                         # Get response from OpenAI API
                         prompt_count += 1
@@ -205,8 +206,8 @@ async def proxy(client_ws, path):
                         time_increment = len(chunk) / 8000.0
                         audio_cursor += time_increment
                         buffer.extend(chunk)
+                        print(f"chunk here: {chunk}")
                         if chunk == b'':
-                            print("emptybyte")
                             empty_byte_received = True
                                 
                     if data["event"] == "mark": 
