@@ -155,6 +155,7 @@ async def proxy(client_ws, path):
                     dg_json = json.loads(message)
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
                     if transcript:
+                        print("Got a message")
                         # Get response from OpenAI API
                         if prompt_count > 1:
                             print("got another message.")
