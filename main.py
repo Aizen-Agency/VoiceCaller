@@ -83,24 +83,33 @@ conversation_history_map = {}
 
 async def get_openai_response(transcript, streamSid):
     try:
-        
         conversation_history_map[streamSid].append({"role": "user", "content": transcript})
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=conversation_history_map[streamSid],
             stream=True,
         )
+
         response = ""
+        mid_response = ""
+        mid_response_count = 0
         for chunk in stream:
             if chunk.choices[0].delta.content is not None:
-                response += chunk.choices[0].delta.content
+                delta = chunk.choices[0].delta.content
+                response += delta
+                mid_response += delta
+                mid_response_count += 1
+                if mid_response_count > 9:
+                    mid_response_count = 0
+                    yield mid_response  # Yield each chunk immediately to enable streaming
+                    mid_response = ""
+
+        conversation_history_map[streamSid].append({"role": "assistant", "content": response})
         
-        conversation_history_map[streamSid].append({"role": "assistant", "content": response})      
-        return response     
-    
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
-        return "Sorry, I couldn't process the response"
+        yield "Sorry, I couldn't process the response."
+
 
 async def proxy(client_ws, path):
     outbox = asyncio.Queue()
@@ -133,32 +142,40 @@ async def proxy(client_ws, path):
                                     "streamSid": streamSid,
                                     }))
                              
-                        response = await get_openai_response(transcript, streamSid)
-                        payload =  text_to_speech_base64(response)
-                        try:
-                            
-                           await client_ws.send(json.dumps({
-                            "event": "media",
-                            "streamSid": streamSid,
-                            "media": {
-                                "payload": payload
-                            }
-                        }))
-                        except Exception as e:
-                            print("Error sending message:", e)
-                            
-                        try:
-                            
-                           await client_ws.send(json.dumps({ 
-                                "event": "mark",
+                        async for chunk in get_openai_response(transcript, streamSid):  
+                            # response = await get_openai_response(transcript, streamSid)
+                            payload =  text_to_speech_base64(chunk)
+                            try:
+                                
+                                await client_ws.send(json.dumps({
+                                "event": "media",
                                 "streamSid": streamSid,
-                                "mark": {
-                                "name": "response_ends"
+                                "media": {
+                                    "payload": payload
                                 }
-                                }))
-                        except Exception as e:
-                            print("Error sending message: ", e)
-                        
+                            }))
+                            except Exception as e:
+                                print("Error sending message:", e)
+                                
+                            try:
+                                
+                                await client_ws.send(json.dumps({ 
+                                    "event": "mark",
+                                    "streamSid": streamSid,
+                                    "mark": {
+                                    "name": "response_ends"
+                                    }
+                                    }))
+                            except Exception as e:
+                                print("Error sending message: ", e)
+                                
+                        await client_ws.send(json.dumps({ 
+                                    "event": "mark",
+                                    "streamSid": streamSid,
+                                    "mark": {
+                                    "name": "prompt_ends"
+                                    }
+                                    }))    
                         print("sent message")
                         
                 except json.JSONDecodeError:
@@ -191,7 +208,8 @@ async def proxy(client_ws, path):
                                 
                     if data["event"] == "mark": 
                         try: 
-                            prompt_count -= 1
+                            if data["mark"]["name"] == "prompt_ends":
+                                prompt_count -= 1
                         except Exception as e:
                             print(e)
                         
