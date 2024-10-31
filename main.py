@@ -70,17 +70,28 @@ def text_to_speech_base64(text: str) -> str:
     # Return the base64-encoded string
     return ulaw_base64
 
-def deepgram_connect():
-    extra_headers = {'Authorization': f'Token {DEEPGRAM_API_KEY}'}
-    deepgram_ws = websockets.connect(
-        "wss://api.deepgram.com/v1/listen?encoding=mulaw&sample_rate=8000&endpointing=true", 
-        extra_headers=extra_headers
-    )
-    deepgram_ws_2 = websockets.connect(
-        "wss://api.deepgram.com/v1/listen?encoding=mulaw&sample_rate=8000&endpointing=true", 
-        extra_headers=extra_headers
-    )
-    return deepgram_ws, deepgram_ws_2
+class DeepgramConnection:
+    def __init__(self):
+        self.extra_headers = {'Authorization': f'Token {DEEPGRAM_API_KEY}'}
+        self.deepgram_ws = None
+        self.deepgram_ws_2 = None
+
+    async def __aenter__(self):
+        self.deepgram_ws = await websockets.connect(
+            "wss://api.deepgram.com/v1/listen?encoding=mulaw&sample_rate=8000&endpointing=true", 
+            extra_headers=self.extra_headers
+        )
+        self.deepgram_ws_2 = await websockets.connect(
+            "wss://api.deepgram.com/v1/listen?encoding=mulaw&sample_rate=8000&endpointing=true", 
+            extra_headers=self.extra_headers
+        )
+        return self.deepgram_ws, self.deepgram_ws_2
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        if self.deepgram_ws:
+            await self.deepgram_ws.close()
+        if self.deepgram_ws_2:
+            await self.deepgram_ws_2.close()
 
 
 conversation_history_map = {}
@@ -124,7 +135,7 @@ async def proxy(client_ws, path):
     streamSid = ""
     prompt_count = 0
     
-    async with deepgram_connect() as [deepgram_ws, deepgram_ws_2]:
+    async with DeepgramConnection() as (deepgram_ws, deepgram_ws_2):
         async def deepgram_sender(deepgram_ws):
             while True:
                 chunk = await outbox.get()
