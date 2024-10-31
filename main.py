@@ -170,6 +170,7 @@ async def proxy(client_ws, path):
                                     "event": "clear",
                                     "streamSid": streamSid,
                                     }))
+                            prompt_count = 0
                             await asyncio.sleep(2)
                             print("unsetting flag")
                             unset_break(streamSid=streamSid)
