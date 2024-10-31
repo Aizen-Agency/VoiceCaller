@@ -134,7 +134,6 @@ async def proxy(client_ws, path):
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
                     if transcript:
                         # Get response from OpenAI API
-                        prompt_count += 1
                         if prompt_count > 1:
                              await client_ws.send(json.dumps({ 
                                     "event": "clear",
@@ -153,6 +152,7 @@ async def proxy(client_ws, path):
                                         "payload": payload
                                     }
                                 }))
+                                prompt_count += 1
                                 print("m2")
                                 await client_ws.send(json.dumps({ 
                                         "event": "mark",
@@ -164,16 +164,6 @@ async def proxy(client_ws, path):
                             except Exception as e:
                                 print("Error sending message:", e)
                                 
-                        try:  
-                            await client_ws.send(json.dumps({ 
-                                    "event": "mark",
-                                    "streamSid": streamSid,
-                                    "mark": {
-                                    "name": "prompt_ends"
-                                    }
-                                    }))
-                        except Exception as e:
-                            print("Error sending message: ", e)
                         
                         print("sent message")
                         
@@ -207,8 +197,7 @@ async def proxy(client_ws, path):
                                 
                     if data["event"] == "mark": 
                         try: 
-                            if data['mark']['name'] == 'prompt_ends':
-                                prompt_count -= 1
+                            prompt_count -= 1
                             print(data['mark']['name'])
                             print(prompt_count)
                         except Exception as e:
