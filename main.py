@@ -152,10 +152,6 @@ async def proxy(client_ws, path):
                                         "payload": payload
                                     }
                                 }))
-                            except Exception as e:
-                                print("Error sending message:", e)
-                            
-                            try:  
                                 await client_ws.send(json.dumps({ 
                                         "event": "mark",
                                         "streamSid": streamSid,
@@ -164,7 +160,7 @@ async def proxy(client_ws, path):
                                         }
                                         }))
                             except Exception as e:
-                                print("Error sending message: ", e)
+                                print("Error sending message:", e)
                                 
                         try:  
                             await client_ws.send(json.dumps({ 
@@ -211,6 +207,8 @@ async def proxy(client_ws, path):
                         try: 
                             if data['mark']['name'] == 'prompt_ends':
                                 prompt_count -= 1
+                            print(data['mark']['name'])
+                            print(prompt_count)
                         except Exception as e:
                             print(e)
                         
