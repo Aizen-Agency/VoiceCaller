@@ -91,12 +91,18 @@ async def get_openai_response(transcript, streamSid):
         )
 
         response = ""
+        mid_response = ""
+        mid_response_count = 0
         for chunk in stream:
-            print(chunk)
             if chunk.choices[0].delta.content is not None:
                 delta = chunk.choices[0].delta.content
                 response += delta
-                yield delta  # Yield each chunk immediately to enable streaming
+                mid_response += delta
+                mid_response_count += 1
+                if mid_response_count > 4:
+                    mid_response_count = 0
+                    yield mid_response  # Yield each chunk immediately to enable streaming
+                    mid_response = ""
 
         conversation_history_map[streamSid].append({"role": "assistant", "content": response})
         
