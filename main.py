@@ -99,7 +99,7 @@ async def get_openai_response(transcript, streamSid):
                 response += delta
                 mid_response += delta
                 mid_response_count += 1
-                if mid_response_count > 9:
+                if mid_response_count > 19:
                     mid_response_count = 0
                     yield mid_response  # Yield each chunk immediately to enable streaming
                     mid_response = ""
@@ -199,13 +199,14 @@ async def proxy(client_ws, path):
                             conversation_history_map[streamSid] = [ {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}]
                         continue
                     if data["event"] == "media":
-                        print(data["media"]['payload'])
+                        # print(data["media"]['payload'])
                         media = data["media"]
                         chunk = base64.b64decode(media["payload"])
                         time_increment = len(chunk) / 8000.0
                         audio_cursor += time_increment
                         buffer.extend(chunk)
                         if chunk == b'':
+                            print("emptybyte")
                             empty_byte_received = True
                                 
                     if data["event"] == "mark": 
