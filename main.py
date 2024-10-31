@@ -124,8 +124,9 @@ async def get_openai_response(transcript, streamSid):
                 mid_response += delta
                 mid_response_count += 1
 
-                if mid_response_count > 4:
+                if mid_response_count > 9:
                     mid_response_count = 0
+                    await asyncio.sleep(0.5)
                     yield mid_response  # Yield each chunk immediately
                     mid_response = ""
 
@@ -191,7 +192,7 @@ async def proxy(client_ws, path):
                                         "event": "mark",
                                         "streamSid": streamSid,
                                         "mark": {
-                                        "name": "response_ends"
+                                        "name": chunk
                                         }
                                         }))
                             except Exception as e:
