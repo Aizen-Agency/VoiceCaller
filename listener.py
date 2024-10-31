@@ -83,33 +83,24 @@ conversation_history_map = {}
 
 async def get_openai_response(transcript, streamSid):
     try:
+        
         conversation_history_map[streamSid].append({"role": "user", "content": transcript})
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=conversation_history_map[streamSid],
             stream=True,
         )
-
         response = ""
-        mid_response = ""
-        mid_response_count = 0
         for chunk in stream:
             if chunk.choices[0].delta.content is not None:
-                delta = chunk.choices[0].delta.content
-                response += delta
-                mid_response += delta
-                mid_response_count += 1
-                if mid_response_count > 9:
-                    mid_response_count = 0
-                    yield mid_response  # Yield each chunk immediately to enable streaming
-                    mid_response = ""
-
-        conversation_history_map[streamSid].append({"role": "assistant", "content": response})
+                response += chunk.choices[0].delta.content
         
+        conversation_history_map[streamSid].append({"role": "assistant", "content": response})      
+        return response     
+    
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
-        yield "Sorry, I couldn't process the response."
-
+        return "Sorry, I couldn't process the response."
 
 async def proxy(client_ws, path):
     outbox = asyncio.Queue()
@@ -131,54 +122,10 @@ async def proxy(client_ws, path):
             nonlocal prompt_count
             async for message in deepgram_ws:
                 try:
-                    print("1111")
                     dg_json = json.loads(message)
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
                     if transcript:
-                        # Get response from OpenAI API
-                        prompt_count += 1
-                        if prompt_count > 1:
-                             await client_ws.send(json.dumps({ 
-                                    "event": "clear",
-                                    "streamSid": streamSid,
-                                    }))
-                             
-                        async for chunk in get_openai_response(transcript, streamSid):  
-                            # response = await get_openai_response(transcript, streamSid)
-                            payload =  text_to_speech_base64(chunk)
-                            try:
-                                
-                                await client_ws.send(json.dumps({
-                                "event": "media",
-                                "streamSid": streamSid,
-                                "media": {
-                                    "payload": payload
-                                }
-                            }))
-                            except Exception as e:
-                                print("Error sending message:", e)
-                                
-                            # try:
-                                
-                            #     await client_ws.send(json.dumps({ 
-                            #         "event": "mark",
-                            #         "streamSid": streamSid,
-                            #         "mark": {
-                            #         "name": "response_ends"
-                            #         }
-                            #         }))
-                            # except Exception as e:
-                            #     print("Error sending message: ", e)
-                                
-                        await client_ws.send(json.dumps({ 
-                                    "event": "mark",
-                                    "streamSid": streamSid,
-                                    "mark": {
-                                    "name": "prompt_ends"
-                                    }
-                                    }))    
-                        print("sent message")
-                        
+                       print(transcript)
                 except json.JSONDecodeError:
                     print('Was not able to parse Deepgram response as JSON.')
                     continue
@@ -199,7 +146,6 @@ async def proxy(client_ws, path):
                             conversation_history_map[streamSid] = [ {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}]
                         continue
                     if data["event"] == "media":
-                        print(data["media"]['payload'])
                         media = data["media"]
                         chunk = base64.b64decode(media["payload"])
                         time_increment = len(chunk) / 8000.0
@@ -210,8 +156,7 @@ async def proxy(client_ws, path):
                                 
                     if data["event"] == "mark": 
                         try: 
-                            if data["mark"]["name"] == "prompt_ends":
-                                prompt_count -= 1
+                            prompt_count -= 1
                         except Exception as e:
                             print(e)
                         
@@ -246,7 +191,7 @@ async def proxy(client_ws, path):
 #     await asyncio.Future()  # Keep the server running indefinitely
 
 async def main():
-    port = int(os.environ.get("PORT", 5000))  # Default to 5000 if PORT is not set
+    port = int(os.environ.get("PORT", 6000))  # Default to 5000 if PORT is not set
     proxy_server = websockets.serve(proxy, '0.0.0.0', port)  # Bind to all interfaces
     await proxy_server
 
