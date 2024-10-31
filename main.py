@@ -87,6 +87,7 @@ async def get_openai_response(transcript, streamSid):
 
         response = ""
         for chunk in stream:
+            print(chunk)
             if chunk.choices[0].delta.content is not None:
                 delta = chunk.choices[0].delta.content
                 response += delta
