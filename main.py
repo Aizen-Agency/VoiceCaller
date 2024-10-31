@@ -175,10 +175,10 @@ async def proxy(client_ws, path):
                             unset_break(streamSid=streamSid)
                     
                         async for chunk in get_openai_response(transcript, streamSid):
+                            print("got chunk from gpt")
                             payload =  text_to_speech_base64(chunk)
                             try:
                                 
-                                print("m1")
                                 await client_ws.send(json.dumps({
                                     "event": "media",
                                     "streamSid": streamSid,
@@ -186,8 +186,6 @@ async def proxy(client_ws, path):
                                         "payload": payload
                                     }
                                 }))
-                                prompt_count += 1
-                                print("m2")
                                 await client_ws.send(json.dumps({ 
                                         "event": "mark",
                                         "streamSid": streamSid,
@@ -195,6 +193,7 @@ async def proxy(client_ws, path):
                                         "name": chunk
                                         }
                                         }))
+                                prompt_count += 1
                             except Exception as e:
                                 print("Error sending message:", e)
                                 
