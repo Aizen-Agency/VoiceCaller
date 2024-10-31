@@ -178,6 +178,9 @@ async def proxy(client_ws, path):
                             print("got chunk from gpt")
                             payload =  text_to_speech_base64(chunk)
                             try:
+                                if break_flags[streamSid].is_set():
+                                    print("Breaking the loop as requested in other for.")
+                                    break
                                 
                                 await client_ws.send(json.dumps({
                                     "event": "media",
