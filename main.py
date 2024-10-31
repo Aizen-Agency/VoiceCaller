@@ -80,63 +80,28 @@ def deepgram_connect():
 
 
 conversation_history_map = {}
-break_flags = {}
-
-# Function to set the break flag
-def trigger_break(streamSid):
-    if streamSid in break_flags:
-        break_flags[streamSid].set()
-        
-        
-def unset_break(streamSid):
-    if streamSid in break_flags:
-        break_flags[streamSid].clear()
 
 async def get_openai_response(transcript, streamSid):
     try:
-        # Initialize the flag for this streamSid if it doesn't exist
-        if streamSid not in break_flags:
-            break_flags[streamSid] = asyncio.Event()
-
-        # Append user message to the conversation history
-        conversation_history_map[streamSid].append({"role": "user", "content": transcript})
         
-        # Initialize the stream
+        conversation_history_map[streamSid].append({"role": "user", "content": transcript})
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=conversation_history_map[streamSid],
             stream=True,
         )
-
         response = ""
-        mid_response = ""
-        mid_response_count = 0
         for chunk in stream:
-            # Check if the break flag is set
-            if break_flags[streamSid].is_set():
-                print("Breaking the loop as requested.")
-                break
-
-            # Process the stream chunk
             if chunk.choices[0].delta.content is not None:
-                delta = chunk.choices[0].delta.content
-                response += delta
-                mid_response += delta
-                mid_response_count += 1
-
-                if mid_response_count > 9:
-                    mid_response_count = 0
-                    yield mid_response  # Yield each chunk immediately
-                    mid_response = ""
-
-        # Append the assistant's response to the conversation history
-        conversation_history_map[streamSid].append({"role": "assistant", "content": response})
+                response += chunk.choices[0].delta.content
         
+        conversation_history_map[streamSid].append({"role": "assistant", "content": response})      
+        return response     
+    
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
-        yield "Sorry, I couldn't process the response"
-        
-        
+        return "Sorry, I couldn't process the response"
+
 async def proxy(client_ws, path):
     outbox = asyncio.Queue()
 
@@ -153,8 +118,6 @@ async def proxy(client_ws, path):
                 await deepgram_ws.send(chunk)
 
         async def deepgram_receiver(deepgram_ws):
-            print("111111")
-            print(deepgram_ws)
             nonlocal audio_cursor
             nonlocal prompt_count
             async for message in deepgram_ws:
@@ -162,45 +125,39 @@ async def proxy(client_ws, path):
                     dg_json = json.loads(message)
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
                     if transcript:
-                        print("Got a message")
                         # Get response from OpenAI API
+                        prompt_count += 1
                         if prompt_count > 1:
-                            print("got another message.")
-                            trigger_break(streamSid=streamSid)
-                            await client_ws.send(json.dumps({ 
+                             await client_ws.send(json.dumps({ 
                                     "event": "clear",
                                     "streamSid": streamSid,
                                     }))
-                            prompt_count = 0
-                            print("unsetting flag")
-                            unset_break(streamSid=streamSid)
-                    
-                        async for chunk in get_openai_response(transcript, streamSid):
-                            print("got chunk from gpt")
-                            payload =  text_to_speech_base64(chunk)
-                            try:
-                                if break_flags[streamSid].is_set():
-                                    print("Breaking the loop as requested in other for.")
-                                    break
-                                
-                                await client_ws.send(json.dumps({
-                                    "event": "media",
-                                    "streamSid": streamSid,
-                                    "media": {
-                                        "payload": payload
-                                    }
+                             
+                        response = await get_openai_response(transcript, streamSid)
+                        payload =  text_to_speech_base64(response)
+                        try:
+                            
+                           await client_ws.send(json.dumps({
+                            "event": "media",
+                            "streamSid": streamSid,
+                            "media": {
+                                "payload": payload
+                            }
+                        }))
+                        except Exception as e:
+                            print("Error sending message:", e)
+                            
+                        try:
+                            
+                           await client_ws.send(json.dumps({ 
+                                "event": "mark",
+                                "streamSid": streamSid,
+                                "mark": {
+                                "name": "response_ends"
+                                }
                                 }))
-                                await client_ws.send(json.dumps({ 
-                                        "event": "mark",
-                                        "streamSid": streamSid,
-                                        "mark": {
-                                        "name": chunk
-                                        }
-                                        }))
-                                prompt_count += 1
-                            except Exception as e:
-                                print("Error sending message:", e)
-                                
+                        except Exception as e:
+                            print("Error sending message: ", e)
                         
                         print("sent message")
                         
@@ -235,8 +192,6 @@ async def proxy(client_ws, path):
                     if data["event"] == "mark": 
                         try: 
                             prompt_count -= 1
-                            print(data['mark']['name'])
-                            print(prompt_count)
                         except Exception as e:
                             print(e)
                         
