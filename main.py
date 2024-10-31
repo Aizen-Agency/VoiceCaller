@@ -32,13 +32,13 @@ elevenlabsclient = ElevenLabs(
 )
 
 
-def text_to_speech_base64(text: str) -> str:
+def text_to_speech_base64_stream(text: str):
     # Calling the text_to_speech conversion API with detailed parameters
     response = elevenlabsclient.text_to_speech.convert(
-        voice_id="pNInz6obpgDQGcFmaJgB",  # Adam pre-made voice
+        voice_id="pNInz6obpgDQGcFmaJgB",
         output_format="mp3_22050_32",
         text=text,
-        model_id="eleven_turbo_v2_5",  # use the turbo model for low latency
+        model_id="eleven_turbo_v2_5",
         voice_settings=VoiceSettings(
             stability=0.0,
             similarity_boost=1.0,
@@ -47,28 +47,23 @@ def text_to_speech_base64(text: str) -> str:
         ),
     )
 
-    # Collect all chunks of audio data
     audio_data = BytesIO()
     for chunk in response:
         if chunk:
             audio_data.write(chunk)
-    
-    # Reset the buffer position to the start
-    audio_data.seek(0)
+            audio_data.seek(0)
+            audio_segment = AudioSegment.from_mp3(audio_data)
+            audio_segment = audio_segment.set_frame_rate(8000).set_sample_width(1).set_channels(1)
 
-    # Convert to AudioSegment and set frame rate to 8000 Hz with μ-law encoding
-    audio_segment = AudioSegment.from_mp3(audio_data)
-    audio_segment = audio_segment.set_frame_rate(8000).set_sample_width(1).set_channels(1)
+            # Export audio chunk to a μ-law encoded BytesIO buffer
+            ulaw_buffer = BytesIO()
+            audio_segment.export(ulaw_buffer, format="wav", codec="pcm_mulaw")
 
-    # Export audio to a μ-law encoded BytesIO buffer
-    ulaw_buffer = BytesIO()
-    audio_segment.export(ulaw_buffer, format="wav", codec="pcm_mulaw")
-
-    # Encode to base64
-    ulaw_base64 = base64.b64encode(ulaw_buffer.getvalue()).decode("utf-8")
-
-    # Return the base64-encoded string
-    return ulaw_base64
+            # Reset for new chunk processing and yield current chunk in base64
+            ulaw_base64 = base64.b64encode(ulaw_buffer.getvalue()).decode("utf-8")
+            yield ulaw_base64
+            audio_data.seek(0)
+            audio_data.truncate(0)
 
 def deepgram_connect():
     extra_headers = {'Authorization': f'Token {DEEPGRAM_API_KEY}'}
@@ -83,24 +78,26 @@ conversation_history_map = {}
 
 async def get_openai_response(transcript, streamSid):
     try:
-        
         conversation_history_map[streamSid].append({"role": "user", "content": transcript})
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=conversation_history_map[streamSid],
             stream=True,
         )
+
         response = ""
         for chunk in stream:
             if chunk.choices[0].delta.content is not None:
-                response += chunk.choices[0].delta.content
+                delta = chunk.choices[0].delta.content
+                response += delta
+                yield delta  # Yield each chunk immediately to enable streaming
+
+        conversation_history_map[streamSid].append({"role": "assistant", "content": response})
         
-        conversation_history_map[streamSid].append({"role": "assistant", "content": response})      
-        return response     
-    
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
-        return "Sorry, I couldn't process the response."
+        yield "Sorry, I couldn't process the response."
+
 
 async def proxy(client_ws, path):
     outbox = asyncio.Queue()
@@ -132,24 +129,24 @@ async def proxy(client_ws, path):
                                     "event": "clear",
                                     "streamSid": streamSid,
                                     }))
-                             
-                        response = await get_openai_response(transcript, streamSid)
-                        payload =  text_to_speech_base64(response)
+
+                        
+                        async for chunk in get_openai_response(transcript, streamSid):
+                            print(chunk)
+                            for audio_chunk in text_to_speech_base64_stream(chunk):
+                                try:
+                                    await client_ws.send(json.dumps({
+                                        "event": "media",
+                                        "streamSid": streamSid,
+                                        "media": {
+                                            "payload": audio_chunk
+                                        }
+                                    }))
+                                except Exception as e:
+                                        print("Error sending message:", e)
+                            
                         try:
-                            
-                           await client_ws.send(json.dumps({
-                            "event": "media",
-                            "streamSid": streamSid,
-                            "media": {
-                                "payload": payload
-                            }
-                        }))
-                        except Exception as e:
-                            print("Error sending message:", e)
-                            
-                        try:
-                            
-                           await client_ws.send(json.dumps({ 
+                            await client_ws.send(json.dumps({ 
                                 "event": "mark",
                                 "streamSid": streamSid,
                                 "mark": {
