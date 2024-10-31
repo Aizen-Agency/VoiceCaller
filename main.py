@@ -86,6 +86,11 @@ break_flags = {}
 def trigger_break(streamSid):
     if streamSid in break_flags:
         break_flags[streamSid].set()
+        
+        
+def unset_break(streamSid):
+    if streamSid in break_flags:
+        break_flags[streamSid].clear()
 
 async def get_openai_response(transcript, streamSid):
     try:
@@ -164,6 +169,9 @@ async def proxy(client_ws, path):
                                     "event": "clear",
                                     "streamSid": streamSid,
                                     }))
+                            await asyncio.sleep(2)
+                            print("unsetting flag")
+                            unset_break(streamSid=streamSid)
                     
                         async for chunk in get_openai_response(transcript, streamSid):
                             payload =  text_to_speech_base64(chunk)
