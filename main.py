@@ -154,6 +154,8 @@ async def proxy(client_ws, path):
                 await deepgram_ws.send(chunk)
 
         async def deepgram_receiver(deepgram_ws):
+            print("111111")
+            print(deepgram_ws)
             nonlocal audio_cursor
             nonlocal prompt_count
             async for message in deepgram_ws:
@@ -179,6 +181,8 @@ async def proxy(client_ws, path):
                             print("got chunk from gpt")
                             payload =  text_to_speech_base64(chunk)
                             try:
+                                print("Waiting for any interruption")
+                                await asyncio.sleep(3)
                                 if break_flags[streamSid].is_set():
                                     print("Breaking the loop as requested in other for.")
                                     break
