@@ -115,6 +115,7 @@ async def proxy(client_ws, path):
         async def deepgram_sender(deepgram_ws):
             while True:
                 chunk = await outbox.get()
+                print(f"Sending audio data to Deepgram: {len(chunk)} bytes")
                 await deepgram_ws.send(chunk)
 
         async def deepgram_receiver(deepgram_ws):
@@ -146,29 +147,29 @@ async def proxy(client_ws, path):
                     
             response = await get_openai_response(transcript, streamSid)
             payload =  text_to_speech_base64(response)
-            # try:
+            try:
                 
-            #     await client_ws.send(json.dumps({
-            #     "event": "media",
-            #     "streamSid": streamSid,
-            #     "media": {
-            #         "payload": payload
-            #     }
-            # }))
-            # except Exception as e:
-            #     print("Error sending message:", e)
+                await client_ws.send(json.dumps({
+                "event": "media",
+                "streamSid": streamSid,
+                "media": {
+                    "payload": payload
+                }
+            }))
+            except Exception as e:
+                print("Error sending message:", e)
                 
-            # try:
+            try:
                 
-            #     await client_ws.send(json.dumps({ 
-            #         "event": "mark",
-            #         "streamSid": streamSid,
-            #         "mark": {
-            #         "name": transcript
-            #         }
-            #         }))
-            # except Exception as e:
-            #     print("Error sending message: ", e)
+                await client_ws.send(json.dumps({ 
+                    "event": "mark",
+                    "streamSid": streamSid,
+                    "mark": {
+                    "name": transcript
+                    }
+                    }))
+            except Exception as e:
+                print("Error sending message: ", e)
             
             print("sent message")
             
