@@ -86,8 +86,7 @@ def deepgram_connect():
 conversation_history_map = {}
 
 # Assuming conversation_history_map and client are defined somewhere in your code
-# For demonstration purposes, let's define them minimally
-client = None  # Replace with your OpenAI client initialization
+# For demonstration purposes, let's define them minimally # Replace with your OpenAI client initialization
 
 
 # A simple function to process chunks in a separate thread
@@ -118,7 +117,7 @@ async def get_openai_response(transcript, streamSid):
         conversation_history_map[streamSid].append({"role": "user", "content": transcript})
 
         # Create the chat completion stream
-        stream = client.ChatCompletion.create(
+        stream = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=conversation_history_map[streamSid],
             stream=True,
