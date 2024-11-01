@@ -197,7 +197,7 @@ async def get_openai_response(transcript, streamSid, client_ws):
                     chunk_buffer = []  # Reset the buffer
                     chunk_count = 0  # Reset the chunk count
 
-        print("___________Came out of for loop_____________")
+        print("___________Came out of for loop____________")
         # After finishing the stream, enqueue any remaining chunks
         if chunk_buffer and not stop_event.is_set():
             combined_chunk = ''.join(chunk_buffer)
