@@ -146,7 +146,7 @@ async def proxy(client_ws, path):
     processing_thread.start()
 
     async def get_openai_response(transcript, streamSid):
-        global stop_event 
+        nonlocal stop_event 
         try:
             # Update the conversation history for the user
             if streamSid not in conversation_history_map:
