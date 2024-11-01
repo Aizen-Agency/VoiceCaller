@@ -84,6 +84,7 @@ def deepgram_connect():
 
 
 conversation_history_map = {}
+stop_event = threading.Event() 
 
 # Assuming conversation_history_map and client are defined somewhere in your code
 # For demonstration purposes, let's define them minimally # Replace with your OpenAI client initialization
@@ -108,6 +109,7 @@ processing_thread.daemon = True  # Make the thread a daemon thread
 processing_thread.start()
 
 async def get_openai_response(transcript, streamSid):
+    global stop_event 
     try:
         # Update the conversation history for the user
         if streamSid not in conversation_history_map:
@@ -127,6 +129,10 @@ async def get_openai_response(transcript, streamSid):
 
         # Process the stream and collect chunks
         for chunk in stream:  # Use a regular for loop since stream is not async
+            if stop_event.is_set():  # Check if the stop signal has been set
+                print("Stopping OpenAI request processing.")
+                break 
+            
             if chunk.choices[0].delta.content is not None:
                 chunk_buffer.append(chunk.choices[0].delta.content)
                 chunk_count += 1
@@ -172,7 +178,6 @@ async def proxy(client_ws, path):
         async def deepgram_sender(deepgram_ws):
             while True:
                 chunk = await outbox.get()
-                print(f"Sending audio data to Deepgram: {len(chunk)} bytes")
                 await deepgram_ws.send(chunk)
 
         async def deepgram_receiver(deepgram_ws):
@@ -197,10 +202,14 @@ async def proxy(client_ws, path):
               # Get response from OpenAI API
             prompt_count += 1
             if prompt_count > 1:
-                    await client_ws.send(json.dumps({ 
+                print("stopppinnnnnnnggg")
+                await client_ws.send(json.dumps({ 
                         "event": "clear",
                         "streamSid": streamSid,
-                        }))
+                    }))
+                stop_event.set()
+                time.sleep(2)
+                stop_event.clear()
                     
              # Start a new thread for the OpenAI response function
             openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid)))
