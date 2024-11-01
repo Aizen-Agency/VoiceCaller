@@ -127,12 +127,12 @@ async def get_openai_response(transcript, streamSid):
         chunk_count = 0
 
         # Process the stream and collect chunks
-        async for chunk in stream:  # Use async for to handle the stream
+        for chunk in stream:  # Use regular for loop since stream is not async
             if chunk.choices[0].delta.content is not None:
                 chunk_buffer.append(chunk.choices[0].delta.content)
                 chunk_count += 1
 
-                # Yield and enqueue 20 chunks at a time
+                # Enqueue and print 20 chunks at a time
                 if chunk_count == 20:
                     combined_chunk = ''.join(chunk_buffer)
                     chunk_queue.put(combined_chunk)  # Enqueue for processing
@@ -157,10 +157,9 @@ async def get_openai_response(transcript, streamSid):
         time.sleep(10)
         yield "Sorry, I couldn't process your request."
 
-async def run_openai_response(transcript, streamSid):
+def run_openai_response(transcript, streamSid):
     """Run the OpenAI response function in an asyncio loop."""
-    async for chunk in get_openai_response(transcript, streamSid):
-        chunk_queue.put(chunk)  # Enqueue the chunk for processing
+    asyncio.run(get_openai_response(transcript, streamSid))
 
 async def proxy(client_ws, path):
     outbox = asyncio.Queue()
