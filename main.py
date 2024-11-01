@@ -117,67 +117,60 @@ async def proxy(client_ws, path):
                 chunk = await outbox.get()
                 await deepgram_ws.send(chunk)
 
-    async def deepgram_receiver(deepgram_ws):
-        nonlocal audio_cursor
-        nonlocal prompt_count
-        async for message in deepgram_ws:
-            try:
-                dg_json = json.loads(message)
-                transcript = dg_json["channel"]["alternatives"][0]["transcript"]
-                print(f"transcript : {transcript}")
-                
-                if transcript:
-                    # Increment prompt count and clear stream if necessary
-                    prompt_count += 1
-                    if prompt_count > 1:
-                        asyncio.create_task(send_clear_event(client_ws, streamSid))
-                    
-                    # Get response and send to client in a separate task
-                    asyncio.create_task(handle_response(transcript, streamSid, client_ws))
-
-                print("receiveing ends here")
-            except json.JSONDecodeError:
-                print('Was not able to parse Deepgram response as JSON.')
-                continue
+        async def deepgram_receiver(deepgram_ws):
+            nonlocal audio_cursor
+            nonlocal prompt_count
+            async for message in deepgram_ws:
+                try:
+                    dg_json = json.loads(message)
+                    transcript = dg_json["channel"]["alternatives"][0]["transcript"]
+                    print(f"transcript : {transcript}")
+                    if transcript:
+                        asyncio.create_task(handle_response(transcript=transcript))
+                        
+                    print("receiving ends here")
+                except json.JSONDecodeError:
+                    print('Was not able to parse Deepgram response as JSON.')
+                    continue
 
 
-    async def send_clear_event(client_ws, streamSid):
-        try:
-            await client_ws.send(json.dumps({
-                "event": "clear",
-                "streamSid": streamSid,
-            }))
-        except Exception as e:
-            print("Error sending clear event:", e)
-
-
-    async def handle_response(transcript, streamSid, client_ws):
-        try:
-            # Get response from OpenAI API
-            response = await get_openai_response(transcript, streamSid)
-            payload = text_to_speech_base64(response)
-            
-            # Send the media event
-            await client_ws.send(json.dumps({
-                "event": "media",
-                "streamSid": streamSid,
-                "media": {
-                    "payload": payload
-                }
-            }))
-            
-            # Send the mark event
-            await client_ws.send(json.dumps({
-                "event": "mark",
-                "streamSid": streamSid,
-                "mark": {
-                    "name": transcript
-                }
-            }))
-            
-            print("sent message")
-        except Exception as e:
-            print("Error handling response:", e)
+        async def handle_response(transcript):
+              # Get response from OpenAI API
+                        prompt_count += 1
+                        if prompt_count > 1:
+                             await client_ws.send(json.dumps({ 
+                                    "event": "clear",
+                                    "streamSid": streamSid,
+                                    }))
+                             
+                        response = await get_openai_response(transcript, streamSid)
+                        payload =  text_to_speech_base64(response)
+                        try:
+                            
+                           await client_ws.send(json.dumps({
+                            "event": "media",
+                            "streamSid": streamSid,
+                            "media": {
+                                "payload": payload
+                            }
+                        }))
+                        except Exception as e:
+                            print("Error sending message:", e)
+                            
+                        try:
+                            
+                           await client_ws.send(json.dumps({ 
+                                "event": "mark",
+                                "streamSid": streamSid,
+                                "mark": {
+                                "name": transcript
+                                }
+                                }))
+                        except Exception as e:
+                            print("Error sending message: ", e)
+                        
+                        print("sent message")
+                        
 
 
         async def client_receiver(client_ws):
