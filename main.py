@@ -210,6 +210,13 @@ async def get_openai_response(transcript, streamSid, client_ws):
             [chunk.choices[0].delta.content for chunk in stream if chunk.choices[0].delta.content is not None]
         )
         conversation_history_map[streamSid].append({"role": "assistant", "content": full_response})
+        await client_ws.send(json.dumps({ 
+                    "event": "mark",
+                    "streamSid": streamSid,
+                    "mark": {
+                    "name": "ends"
+                    }
+                    }))
 
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
@@ -258,13 +265,13 @@ async def proxy(client_ws, path):
             prompt_count += 1
             if prompt_count > 1:
                 print(f"stopppinnnnnnnggg   :  {prompt_count}")
+                stop_event.set()
+                time.sleep(2)
+                stop_event.clear()
                 await client_ws.send(json.dumps({ 
                         "event": "clear",
                         "streamSid": streamSid,
                     }))
-                stop_event.set()
-                time.sleep(2)
-                stop_event.clear()
                     
              # Start a new thread for the OpenAI response function
             openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid, client_ws)))
@@ -299,7 +306,8 @@ async def proxy(client_ws, path):
                                 
                     if data["event"] == "mark": 
                         try: 
-                            prompt_count -= 1
+                            if data['mark']['name'] == "ends":
+                                prompt_count -= 1
                             print(f"mark : {data["mark"]["name"]}")
                         except Exception as e:
                             print(e)
