@@ -192,17 +192,17 @@ async def get_openai_response(transcript, streamSid, client_ws):
                 if chunk_count == 20:
                     combined_chunk = ''.join(chunk_buffer)
                     print(f"Sent chunk: {combined_chunk}")
-                    await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
+                    process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
                      # Print the sent message immediately
                     chunk_buffer = []  # Reset the buffer
                     chunk_count = 0  # Reset the chunk count
 
         print("___________Came out of for loop_____________")
         # After finishing the stream, enqueue any remaining chunks
-        if chunk_buffer:
+        if chunk_buffer and stop_event.is_set():
             combined_chunk = ''.join(chunk_buffer)
             print(f"Sent chunk: {combined_chunk}")
-            await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function for the last chunk
+            process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function for the last chunk
             #print(f"Sent chunk: {combined_chunk}")  # Print the last sent message
 
         # Append the full response to the conversation history
@@ -257,7 +257,7 @@ async def proxy(client_ws, path):
               # Get response from OpenAI API
             prompt_count += 1
             if prompt_count > 1:
-                print("stopppinnnnnnnggg")
+                print(f"stopppinnnnnnnggg   :  {prompt_count}")
                 await client_ws.send(json.dumps({ 
                         "event": "clear",
                         "streamSid": streamSid,
