@@ -98,7 +98,7 @@ def chunk_processor(chunk_queue):
             break
         # Simulate processing the chunk
         print(f"Processing chunk: {chunk}")
-        time.sleep(1)  # Simulate time taken to process the chunk
+        time.sleep(10)  # Simulate time taken to process the chunk
         chunk_queue.task_done()
 
 # Initialize the chunk queue
@@ -155,6 +155,7 @@ async def get_openai_response(transcript, streamSid):
 
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
+        time.sleep(10)
         yield "Sorry, I couldn't process your request."
 
 async def run_openai_response(transcript, streamSid):
