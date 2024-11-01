@@ -86,7 +86,7 @@ async def get_openai_response(transcript, streamSid):
         # Update the conversation history for the user
         conversation_history_map[streamSid].append({"role": "user", "content": transcript})
         
-        # Create the chat completion stream
+        # Create the chat completion stream (this call is synchronous)
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=conversation_history_map[streamSid],
@@ -97,7 +97,7 @@ async def get_openai_response(transcript, streamSid):
         chunk_count = 0
         
         # Process the stream and collect chunks
-        async for chunk in stream:
+        for chunk in stream:  # Use a regular for loop for a synchronous stream
             if chunk.choices[0].delta.content is not None:
                 chunk_buffer.append(chunk.choices[0].delta.content)
                 chunk_count += 1
@@ -113,13 +113,14 @@ async def get_openai_response(transcript, streamSid):
             yield ''.join(chunk_buffer)
 
         # Append the full response to the conversation history
-        full_response = ''.join([chunk.choices[0].delta.content for chunk in stream if chunk.choices[0].delta.content is not None])
+        full_response = ''.join(
+            [chunk.choices[0].delta.content for chunk in stream if chunk.choices[0].delta.content is not None]
+        )
         conversation_history_map[streamSid].append({"role": "assistant", "content": full_response})      
 
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
         yield "Sorry, I couldn't process your request."
-
 
 async def proxy(client_ws, path):
     outbox = asyncio.Queue()
