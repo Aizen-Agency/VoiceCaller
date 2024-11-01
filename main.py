@@ -192,7 +192,7 @@ async def get_openai_response(transcript, streamSid, client_ws):
                 if chunk_count == 20:
                     combined_chunk = ''.join(chunk_buffer)
                     print(f"Sent chunk: {combined_chunk}")
-                    process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
+                    await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
                      # Print the sent message immediately
                     chunk_buffer = []  # Reset the buffer
                     chunk_count = 0  # Reset the chunk count
