@@ -117,7 +117,7 @@ async def proxy(client_ws, path):
                 chunk = await outbox.get()
                 await deepgram_ws.send(chunk)
 
-        async def deepgram_receiver(deepgram_ws, client_ws, streamSid):
+        async def deepgram_receiver(deepgram_ws):
             nonlocal audio_cursor
             nonlocal prompt_count
             
@@ -129,13 +129,13 @@ async def proxy(client_ws, path):
                     if transcript:
                         prompt_count += 1
                         # Offload the response processing to a separate task
-                        asyncio.create_task(process_transcript(transcript, client_ws, streamSid, prompt_count))
+                        asyncio.create_task(process_transcript(transcript, prompt_count))
                         print("ends deepgram receiver")
                 except json.JSONDecodeError:
                     print('Was not able to parse Deepgram response as JSON.')
                     continue
 
-        async def process_transcript(transcript, client_ws, streamSid, prompt_count):
+        async def process_transcript(transcript, prompt_count):
             try:
                 # Clear previous stream if needed
                 if prompt_count > 1:
