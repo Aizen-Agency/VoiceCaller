@@ -178,10 +178,8 @@ async def get_openai_response(transcript, streamSid, client_ws):
         chunk_buffer = []
         chunk_count = 0
 
-        print(stream)
         # Process the stream and collect chunks
         for chunk in stream:  # Use a regular for loop since stream is not async
-            print(chunk)
             if stop_event.is_set():  # Check if the stop signal has been set
                 print("Stopping OpenAI request processing.")
                 break 
@@ -201,7 +199,7 @@ async def get_openai_response(transcript, streamSid, client_ws):
 
         print("___________Came out of for loop_____________")
         # After finishing the stream, enqueue any remaining chunks
-        if chunk_buffer and not stop_event.is_set():
+        if chunk_buffer and stop_event.is_set():
             combined_chunk = ''.join(chunk_buffer)
             print(f"Sent chunk: {combined_chunk}")
             process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function for the last chunk
@@ -224,10 +222,9 @@ async def get_openai_response(transcript, streamSid, client_ws):
         print(f"Error in OpenAI API call: {e}")
 
 
-def run_openai_response(transcript, streamSid, client_ws, loop):
-    """Schedules the OpenAI response function to run within the given event loop."""
-    asyncio.run_coroutine_threadsafe(get_openai_response(transcript, streamSid, client_ws), loop)
-
+def run_openai_response(transcript, streamSid, client_ws):
+    """Run the OpenAI response function in an asyncio loop."""
+    asyncio.run(get_openai_response(transcript, streamSid, client_ws))
 
 
 async def proxy(client_ws, path):
@@ -275,15 +272,10 @@ async def proxy(client_ws, path):
                         "event": "clear",
                         "streamSid": streamSid,
                     }))
-                prompt_count = 1
-                   
                     
-            # Start a new thread for the OpenAI response function
-            # Start a new thread for the OpenAI response function, passing the event loop
-            loop = asyncio.get_event_loop()  # Get the current event loop
-            openai_thread = threading.Thread(target=lambda: run_openai_response(transcript, streamSid, client_ws, loop))
+             # Start a new thread for the OpenAI response function
+            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid, client_ws)))
             openai_thread.start()
-
 
             
 
