@@ -118,6 +118,7 @@ async def proxy(client_ws, path):
                 print(f"Sending audio data to Deepgram: {len(chunk)} bytes")
                 await deepgram_ws.send(chunk)
 
+
         async def deepgram_receiver(deepgram_ws):
             nonlocal audio_cursor
             nonlocal prompt_count
@@ -174,7 +175,6 @@ async def proxy(client_ws, path):
             print("sent message")
             
 
-
         async def client_receiver(client_ws):
             nonlocal streamSid 
             nonlocal audio_cursor
@@ -220,15 +220,101 @@ async def proxy(client_ws, path):
 
             outbox.put_nowait(b'')
 
+        
+        print("start")
         await asyncio.wait([
             asyncio.ensure_future(deepgram_sender(deepgram_ws)),
             asyncio.ensure_future(deepgram_receiver(deepgram_ws)),
             asyncio.ensure_future(client_receiver(client_ws))
         ])
+        print("ends")
 
         await client_ws.close()
         del conversation_history_map[streamSid]
         print('Finished running the proxy')
+
+    async with deepgram_connect() as deepgram_ws:
+            async def deepgram_sender(deepgram_ws):
+                while True:
+                    chunk = await outbox.get()
+                    print(f"Sending audio data to Deepgram 2: {len(chunk)} bytes")
+                    await deepgram_ws.send(chunk)
+
+
+            async def deepgram_receiver(deepgram_ws):
+                nonlocal audio_cursor
+                nonlocal prompt_count
+                async for message in deepgram_ws:
+                    try:
+                        dg_json = json.loads(message)
+                        transcript = dg_json["channel"]["alternatives"][0]["transcript"]
+                        print(f"transcript 2: {transcript}")
+                        # if transcript:
+                        #     asyncio.create_task(handle_response(transcript=transcript))
+                            
+                        print("receiving ends here 2")
+                    except json.JSONDecodeError:
+                        print('Was not able to parse Deepgram response as JSON.')
+                        continue
+
+
+            async def client_receiver(client_ws):
+                nonlocal streamSid 
+                nonlocal audio_cursor
+                nonlocal prompt_count
+                BUFFER_SIZE = 20 * 160
+                buffer = bytearray(b'')
+                empty_byte_received = False
+                async for message in client_ws:
+                    try:
+                        data = json.loads(message)
+                        if data["event"] in ("connected", "start"):
+                            if data['event'] in ("start"):
+                                streamSid = data['streamSid']
+                                conversation_history_map[streamSid] = [ {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}]
+                            continue
+                        if data["event"] == "media":
+                            media = data["media"]
+                            chunk = base64.b64decode(media["payload"])
+                            time_increment = len(chunk) / 8000.0
+                            audio_cursor += time_increment
+                            buffer.extend(chunk)
+                            if chunk == b'':
+                                empty_byte_received = True
+                                    
+                        if data["event"] == "mark": 
+                            try: 
+                                prompt_count -= 1
+                                print(f"mark 2: {data["mark"]["name"]}")
+                            except Exception as e:
+                                print(e)
+                            
+                        if data["event"] == "stop":
+                            streamSid = data['streamSid']
+                            del conversation_history_map[streamSid]
+                            break
+                        
+                        if len(buffer) >= BUFFER_SIZE or empty_byte_received:
+                            outbox.put_nowait(buffer)
+                            buffer = bytearray(b'')
+                    except json.JSONDecodeError:
+                        print('Message from client not formatted correctly, bailing')
+                        break
+
+                outbox.put_nowait(b'')
+
+            
+            print("start2")
+            await asyncio.wait([
+                asyncio.ensure_future(deepgram_sender(deepgram_ws)),
+                asyncio.ensure_future(deepgram_receiver(deepgram_ws)),
+                asyncio.ensure_future(client_receiver(client_ws))
+            ])
+            print("ends2")
+
+            await client_ws.close()
+            del conversation_history_map[streamSid]
+            print('Finished running the proxy')
 
 # async def main():
 #     proxy_server = websockets.serve(proxy, 'localhost', 5000)
