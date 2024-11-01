@@ -120,64 +120,51 @@ async def proxy(client_ws, path):
         async def deepgram_receiver(deepgram_ws):
             nonlocal audio_cursor
             nonlocal prompt_count
-            
             async for message in deepgram_ws:
                 try:
                     dg_json = json.loads(message)
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
-                    print(f"transcript : {transcript}")
                     if transcript:
+                        # Get response from OpenAI API
                         prompt_count += 1
-                        # Offload the response processing to a separate task
-                        asyncio.create_task(process_transcript(transcript, prompt_count))
-                        print("ends deepgram receiver")
+                        if prompt_count > 1:
+                             await client_ws.send(json.dumps({ 
+                                    "event": "clear",
+                                    "streamSid": streamSid,
+                                    }))
+                             
+                        response = await get_openai_response(transcript, streamSid)
+                        payload =  text_to_speech_base64(response)
+                        try:
+                            
+                           await client_ws.send(json.dumps({
+                            "event": "media",
+                            "streamSid": streamSid,
+                            "media": {
+                                "payload": payload
+                            }
+                        }))
+                        except Exception as e:
+                            print("Error sending message:", e)
+                            
+                        try:
+                            
+                           await client_ws.send(json.dumps({ 
+                                "event": "mark",
+                                "streamSid": streamSid,
+                                "mark": {
+                                "name": "response_ends"
+                                }
+                                }))
+                        except Exception as e:
+                            print("Error sending message: ", e)
+                        
+                        print("sent message")
+                        
                 except json.JSONDecodeError:
                     print('Was not able to parse Deepgram response as JSON.')
                     continue
 
-        async def process_transcript(transcript, prompt_count):
-            try:
-                # Clear previous stream if needed
-                if prompt_count > 1:
-                    await client_ws.send(json.dumps({
-                        "event": "clear",
-                        "streamSid": streamSid,
-                    }))
-
-                # Get response from OpenAI and convert to audio payload
-                response = await get_openai_response(transcript, streamSid)
-                payload = text_to_speech_base64(response)
-
-                # Send media event
-                try:
-                    await client_ws.send(json.dumps({
-                        "event": "media",
-                        "streamSid": streamSid,
-                        "media": {
-                            "payload": payload
-                        }
-                    }))
-                except Exception as e:
-                    print("Error sending media message:", e)
-
-                # Send mark event
-                try:
-                    await client_ws.send(json.dumps({
-                        "event": "mark",
-                        "streamSid": streamSid,
-                        "mark": {
-                            "name": "response_ends"
-                        }
-                    }))
-                except Exception as e:
-                    print("Error sending mark message:", e)
-
-                print("Sent message")
-
-            except Exception as e:
-                print("Error processing transcript:", e)
-                
-                
         async def client_receiver(client_ws):
             nonlocal streamSid 
             nonlocal audio_cursor
