@@ -124,6 +124,7 @@ async def proxy(client_ws, path):
                 try:
                     dg_json = json.loads(message)
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
+                    print(f"transcript : {transcript}")
                     if transcript:
                         # Get response from OpenAI API
                         prompt_count += 1
@@ -153,7 +154,7 @@ async def proxy(client_ws, path):
                                 "event": "mark",
                                 "streamSid": streamSid,
                                 "mark": {
-                                "name": "response_ends"
+                                "name": transcript
                                 }
                                 }))
                         except Exception as e:
@@ -192,6 +193,7 @@ async def proxy(client_ws, path):
                     if data["event"] == "mark": 
                         try: 
                             prompt_count -= 1
+                            print(f"mark : {data["mark"]["name"]}")
                         except Exception as e:
                             print(e)
                         
