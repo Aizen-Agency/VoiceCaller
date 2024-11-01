@@ -224,8 +224,7 @@ async def get_openai_response(transcript, streamSid, client_ws):
 
 def run_openai_response(transcript, streamSid, client_ws):
     """Run the OpenAI response function in an asyncio loop."""
-    loop = asyncio.get_event_loop()  # Get the main event loop
-    asyncio.run_coroutine_threadsafe(get_openai_response(transcript, streamSid, client_ws), loop)
+    asyncio.run(get_openai_response(transcript, streamSid, client_ws))
 
 
 async def proxy(client_ws, path):
