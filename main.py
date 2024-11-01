@@ -132,7 +132,34 @@ processing_thread = threading.Thread(target=chunk_processor, args=(chunk_queue,)
 processing_thread.daemon = True  # Make the thread a daemon thread
 processing_thread.start()
 
-async def get_openai_response(transcript, streamSid):
+async def process_chunk(chunk, streamSid, client_ws):
+    # Your asynchronous processing logic here
+    # For example, you might want to perform an I/O operation or a database call
+    print(f"processing: {chunk}")
+    payload =  text_to_speech_base64(chunk)
+    try:
+        await client_ws.send(json.dumps({
+                "event": "media",
+                "streamSid": streamSid,
+                "media": {
+                    "payload": payload
+                }
+            }))
+        await client_ws.send(json.dumps({ 
+                    "event": "mark",
+                    "streamSid": streamSid,
+                    "mark": {
+                    "name": chunk
+                    }
+                    }))
+    except Exception as e:
+                print("Error sending message:", e)
+                
+            
+    print("sent message")
+    
+
+async def get_openai_response(transcript, streamSid, client_ws):
     global stop_event 
     try:
         # Update the conversation history for the user
@@ -164,18 +191,19 @@ async def get_openai_response(transcript, streamSid):
                 # Enqueue and print 20 chunks at a time
                 if chunk_count == 20:
                     combined_chunk = ''.join(chunk_buffer)
-                    chunk_queue.put(combined_chunk)  # Enqueue for processing
-                    print(f"Sent chunk: {combined_chunk}")  # Print the sent message immediately
+                    print(f"Sent chunk: {combined_chunk}")
+                    await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
+                     # Print the sent message immediately
                     chunk_buffer = []  # Reset the buffer
                     chunk_count = 0  # Reset the chunk count
 
-        
         print("___________Came out of for loop_____________")
         # After finishing the stream, enqueue any remaining chunks
         if chunk_buffer:
             combined_chunk = ''.join(chunk_buffer)
-            chunk_queue.put(combined_chunk)  # Enqueue for processing
-            print(f"Sent chunk: {combined_chunk}")  # Print the last sent message
+            print(f"Sent chunk: {combined_chunk}")
+            await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function for the last chunk
+            #print(f"Sent chunk: {combined_chunk}")  # Print the last sent message
 
         # Append the full response to the conversation history
         full_response = ''.join(
@@ -186,9 +214,10 @@ async def get_openai_response(transcript, streamSid):
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
 
-def run_openai_response(transcript, streamSid):
+
+def run_openai_response(transcript, streamSid, client_ws):
     """Run the OpenAI response function in an asyncio loop."""
-    asyncio.run(get_openai_response(transcript, streamSid))
+    asyncio.run(get_openai_response(transcript, streamSid, client_ws))
 
 
 async def proxy(client_ws, path):
@@ -238,7 +267,7 @@ async def proxy(client_ws, path):
                 stop_event.clear()
                     
              # Start a new thread for the OpenAI response function
-            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid)))
+            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid, client_ws)))
             openai_thread.start()
 
             
