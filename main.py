@@ -14,6 +14,10 @@ from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
 from io import BytesIO
 from pydub import AudioSegment
+import threading
+import queue
+import time
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -81,12 +85,38 @@ def deepgram_connect():
 
 conversation_history_map = {}
 
+# Assuming conversation_history_map and client are defined somewhere in your code
+# For demonstration purposes, let's define them minimally
+client = None  # Replace with your OpenAI client initialization
+
+# A simple function to process chunks in a separate thread
+def chunk_processor(chunk_queue):
+    while True:
+        chunk = chunk_queue.get()
+        if chunk is None:  # A sentinel value to exit the loop
+            break
+        # Simulate processing the chunk
+        print(f"Processing chunk: {chunk}")
+        time.sleep(1)  # Simulate time taken to process the chunk
+        chunk_queue.task_done()
+
+# Initialize the chunk queue
+chunk_queue = queue.Queue()
+
+# Start the chunk processing thread
+processing_thread = threading.Thread(target=chunk_processor, args=(chunk_queue,))
+processing_thread.daemon = True  # Make the thread a daemon thread
+processing_thread.start()
+
 async def get_openai_response(transcript, streamSid):
     try:
         # Update the conversation history for the user
+        if streamSid not in conversation_history_map:
+            conversation_history_map[streamSid] = []  # Initialize if not present
+
         conversation_history_map[streamSid].append({"role": "user", "content": transcript})
-        
-        # Create the chat completion stream (this call is synchronous)
+
+        # Create the chat completion stream
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=conversation_history_map[streamSid],
@@ -95,28 +125,32 @@ async def get_openai_response(transcript, streamSid):
 
         chunk_buffer = []
         chunk_count = 0
-        
+
         # Process the stream and collect chunks
-        for chunk in stream:  # Use a regular for loop for a synchronous stream
+        for chunk in stream:
             if chunk.choices[0].delta.content is not None:
                 chunk_buffer.append(chunk.choices[0].delta.content)
                 chunk_count += 1
-                
-                # Yield 20 chunks at a time
+
+                # Yield and enqueue 20 chunks at a time
                 if chunk_count == 20:
-                    yield ''.join(chunk_buffer)  # Yield the concatenated chunks
+                    combined_chunk = ''.join(chunk_buffer)
+                    yield combined_chunk  # Yield the concatenated chunks
+                    chunk_queue.put(combined_chunk)  # Enqueue for processing
                     chunk_buffer = []  # Reset the buffer
                     chunk_count = 0  # Reset the chunk count
-        
+
         # After finishing the stream, yield any remaining chunks
         if chunk_buffer:
-            yield ''.join(chunk_buffer)
+            combined_chunk = ''.join(chunk_buffer)
+            yield combined_chunk
+            chunk_queue.put(combined_chunk)  # Enqueue for processing
 
         # Append the full response to the conversation history
         full_response = ''.join(
             [chunk.choices[0].delta.content for chunk in stream if chunk.choices[0].delta.content is not None]
         )
-        conversation_history_map[streamSid].append({"role": "assistant", "content": full_response})      
+        conversation_history_map[streamSid].append({"role": "assistant", "content": full_response})
 
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
@@ -165,8 +199,9 @@ async def proxy(client_ws, path):
                         "streamSid": streamSid,
                         }))
                     
-            async for chunk in get_openai_response(transcript, streamSid):
-                print(f"Received chunk: {chunk}")
+            async for response_chunk in get_openai_response(transcript, streamSid):
+                print(f"Received chunk: {response_chunk}")
+                chunk_queue.put(response_chunk)
                 
             # payload =  text_to_speech_base64(response)
             # try:
