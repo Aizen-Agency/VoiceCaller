@@ -88,7 +88,6 @@ conversation_history_map = {}
 # Assuming conversation_history_map and client are defined somewhere in your code
 # For demonstration purposes, let's define them minimally # Replace with your OpenAI client initialization
 
-
 # A simple function to process chunks in a separate thread
 def chunk_processor(chunk_queue):
     while True:
@@ -127,7 +126,7 @@ async def get_openai_response(transcript, streamSid):
         chunk_count = 0
 
         # Process the stream and collect chunks
-        for chunk in stream:  # Use regular for loop since stream is not async
+        for chunk in stream:  # Use a regular for loop since stream is not async
             if chunk.choices[0].delta.content is not None:
                 chunk_buffer.append(chunk.choices[0].delta.content)
                 chunk_count += 1
@@ -154,12 +153,11 @@ async def get_openai_response(transcript, streamSid):
 
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
-        time.sleep(10)
-        yield "Sorry, I couldn't process your request."
 
 def run_openai_response(transcript, streamSid):
     """Run the OpenAI response function in an asyncio loop."""
     asyncio.run(get_openai_response(transcript, streamSid))
+
 
 async def proxy(client_ws, path):
     outbox = asyncio.Queue()
