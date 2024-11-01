@@ -1,22 +1,17 @@
-
 import asyncio
 import websockets
-import sys
 import json
 import base64
 import time
+import os
 from openai import OpenAI
 from dotenv import load_dotenv
-import os
-import requests 
-import uuid
 from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
 from io import BytesIO
 from pydub import AudioSegment
 import threading
 import queue
-import time
 
 
 # Load environment variables from .env file
@@ -28,13 +23,9 @@ ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
-# openai.api_key = OPENAI_API_KEY
+elevenlabsclient = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
-
-elevenlabsclient = ElevenLabs(
-    api_key=ELEVENLABS_API_KEY,
-)
-
+conversation_history_map = {}
 
 def text_to_speech_base64(text: str) -> str:
     # Calling the text_to_speech conversion API with detailed parameters
@@ -74,67 +65,47 @@ def text_to_speech_base64(text: str) -> str:
     # Return the base64-encoded string
     return ulaw_base64
 
-def deepgram_connect():
+async def deepgram_connect():
     extra_headers = {'Authorization': f'Token {DEEPGRAM_API_KEY}'}
-    deepgram_ws = websockets.connect(
+    deepgram_ws = await websockets.connect(
         "wss://api.deepgram.com/v1/listen?encoding=mulaw&sample_rate=8000&endpointing=true", 
         extra_headers=extra_headers
     )
     return deepgram_ws
 
-
-conversation_history_map = {}
-
-
-
 async def proxy(client_ws, path):
     outbox = asyncio.Queue()
-
     audio_cursor = 0.0
-    conn_start = time.time()
-
     streamSid = ""
     prompt_count = 0
     
-    
-    
     stop_event = threading.Event() 
 
-# Assuming conversation_history_map and client are defined somewhere in your code
-# For demonstration purposes, let's define them minimally # Replace with your OpenAI client initialization
-
-# A simple function to process chunks in a separate thread
-    async def chunk_processor(chunk_queue):
+    # A simple function to process chunks in a separate thread
+    def chunk_processor(chunk_queue):
         while True:
             chunk = chunk_queue.get()
             if chunk is None:  # A sentinel value to exit the loop
                 break
-            # Simulate processing the chunk
             print(f"Processing chunk: {chunk}")
-            
-            payload =  text_to_speech_base64(chunk)
+            payload = text_to_speech_base64(chunk)
             try:
-                await client_ws.send(json.dumps({
+                asyncio.run(client_ws.send(json.dumps({
                     "event": "media",
                     "streamSid": streamSid,
                     "media": {
                         "payload": payload
                     }
-                }))
-                await client_ws.send(json.dumps({ 
-                        "event": "mark",
-                        "streamSid": streamSid,
-                        "mark": {
+                })))
+                asyncio.run(client_ws.send(json.dumps({ 
+                    "event": "mark",
+                    "streamSid": streamSid,
+                    "mark": {
                         "name": chunk
-                        }
-                        }))
+                    }
+                })))
             except Exception as e:
-                    print("Error sending message:", e)
-                    
-                
-            print("sent message")
-            
-            
+                print("Error sending message:", e)
             chunk_queue.task_done()
 
     # Initialize the chunk queue
@@ -145,10 +116,9 @@ async def proxy(client_ws, path):
     processing_thread.daemon = True  # Make the thread a daemon thread
     processing_thread.start()
 
-    async def get_openai_response(transcript, streamSid):
-        nonlocal stop_event 
+    async def get_openai_response(transcript):
+        nonlocal stop_event
         try:
-            # Update the conversation history for the user
             if streamSid not in conversation_history_map:
                 conversation_history_map[streamSid] = []  # Initialize if not present
 
@@ -182,15 +152,12 @@ async def proxy(client_ws, path):
                         chunk_buffer = []  # Reset the buffer
                         chunk_count = 0  # Reset the chunk count
 
-            
-            print("___________Came out of for loop_____________")
             # After finishing the stream, enqueue any remaining chunks
             if chunk_buffer:
                 combined_chunk = ''.join(chunk_buffer)
                 chunk_queue.put(combined_chunk)  # Enqueue for processing
                 print(f"Sent chunk: {combined_chunk}")  # Print the last sent message
 
-            # Append the full response to the conversation history
             full_response = ''.join(
                 [chunk.choices[0].delta.content for chunk in stream if chunk.choices[0].delta.content is not None]
             )
@@ -199,58 +166,41 @@ async def proxy(client_ws, path):
         except Exception as e:
             print(f"Error in OpenAI API call: {e}")
 
-    def run_openai_response(transcript, streamSid):
-        """Run the OpenAI response function in an asyncio loop."""
-        asyncio.run(get_openai_response(transcript, streamSid))
-    
     async with deepgram_connect() as deepgram_ws:
-        async def deepgram_sender(deepgram_ws):
+        async def deepgram_sender():
             while True:
                 chunk = await outbox.get()
                 await deepgram_ws.send(chunk)
 
-        async def deepgram_receiver(deepgram_ws):
+        async def deepgram_receiver():
             nonlocal audio_cursor
             nonlocal prompt_count
             async for message in deepgram_ws:
                 try:
                     dg_json = json.loads(message)
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
-                    print(f"transcript : {transcript}")
                     if transcript:
-                        asyncio.create_task(handle_response(transcript=transcript))
-                        
-                    print("receiving ends here")
+                        asyncio.create_task(handle_response(transcript))
                 except json.JSONDecodeError:
                     print('Was not able to parse Deepgram response as JSON.')
-                    continue
-
 
         async def handle_response(transcript):
             nonlocal prompt_count
-              # Get response from OpenAI API
             prompt_count += 1
             if prompt_count > 1:
-                print("stopppinnnnnnnggg")
                 await client_ws.send(json.dumps({ 
-                        "event": "clear",
-                        "streamSid": streamSid,
-                    }))
+                    "event": "clear",
+                    "streamSid": streamSid,
+                }))
                 stop_event.set()
-                time.sleep(2)
+                await asyncio.sleep(2)  # Use asyncio.sleep instead of time.sleep
                 stop_event.clear()
                     
-             # Start a new thread for the OpenAI response function
-            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid)))
-            openai_thread.start()
+            asyncio.create_task(get_openai_response(transcript))
 
-            
-
-
-        async def client_receiver(client_ws):
+        async def client_receiver():
             nonlocal streamSid 
             nonlocal audio_cursor
-            nonlocal prompt_count
             BUFFER_SIZE = 20 * 160
             buffer = bytearray(b'')
             empty_byte_received = False
@@ -258,26 +208,19 @@ async def proxy(client_ws, path):
                 try:
                     data = json.loads(message)
                     if data["event"] in ("connected", "start"):
-                        if data['event'] in ("start"):
+                        if data['event'] == "start":
                             streamSid = data['streamSid']
-                            conversation_history_map[streamSid] = [ {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}]
+                            conversation_history_map[streamSid] = [{"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}]
                         continue
                     if data["event"] == "media":
                         media = data["media"]
                         chunk = base64.b64decode(media["payload"])
-                        time_increment = len(chunk) / 8000.0
-                        audio_cursor += time_increment
+                        audio_cursor += len(chunk) / 8000.0
                         buffer.extend(chunk)
                         if chunk == b'':
                             empty_byte_received = True
-                                
                     if data["event"] == "mark": 
-                        try: 
-                            prompt_count -= 1
-                            print(f"mark : {data["mark"]["name"]}")
-                        except Exception as e:
-                            print(e)
-                        
+                        prompt_count -= 1
                     if data["event"] == "stop":
                         streamSid = data['streamSid']
                         del conversation_history_map[streamSid]
@@ -291,25 +234,16 @@ async def proxy(client_ws, path):
                     break
 
             outbox.put_nowait(b'')
-
         
-        print("start")
+        print("Starting WebSocket communication")
         await asyncio.wait([
-            asyncio.ensure_future(deepgram_sender(deepgram_ws)),
-            asyncio.ensure_future(deepgram_receiver(deepgram_ws)),
-            asyncio.ensure_future(client_receiver(client_ws))
+            asyncio.ensure_future(deepgram_sender()),
+            asyncio.ensure_future(deepgram_receiver()),
+            asyncio.ensure_future(client_receiver())
         ])
-        print("ends")
-
+        print("WebSocket communication ended")
         await client_ws.close()
         del conversation_history_map[streamSid]
-        print('Finished running the proxy')
-
-# async def main():
-#     proxy_server = websockets.serve(proxy, 'localhost', 5000)
-#     await proxy_server
-
-#     await asyncio.Future()  # Keep the server running indefinitely
 
 async def main():
     port = int(os.environ.get("PORT", 5000))  # Default to 5000 if PORT is not set
@@ -318,14 +252,8 @@ async def main():
 
     await asyncio.Future()  # Keep the server running indefinitely
 
-
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         print("Server stopped")
-
-
-
-
-
