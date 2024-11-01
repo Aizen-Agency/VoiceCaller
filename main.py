@@ -199,10 +199,10 @@ async def get_openai_response(transcript, streamSid, client_ws):
 
         print("___________Came out of for loop_____________")
         # After finishing the stream, enqueue any remaining chunks
-        if chunk_buffer and stop_event.is_set():
+        if chunk_buffer and not stop_event.is_set():
             combined_chunk = ''.join(chunk_buffer)
             print(f"Sent chunk: {combined_chunk}")
-            process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function for the last chunk
+            await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function for the last chunk
             #print(f"Sent chunk: {combined_chunk}")  # Print the last sent message
 
         # Append the full response to the conversation history
