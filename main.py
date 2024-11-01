@@ -1,3 +1,4 @@
+
 import asyncio
 import websockets
 import sys
@@ -23,14 +24,21 @@ ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
-elevenlabsclient = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+# openai.api_key = OPENAI_API_KEY
+
+
+elevenlabsclient = ElevenLabs(
+    api_key=ELEVENLABS_API_KEY,
+)
+
 
 def text_to_speech_base64(text: str) -> str:
+    # Calling the text_to_speech conversion API with detailed parameters
     response = elevenlabsclient.text_to_speech.convert(
         voice_id="pNInz6obpgDQGcFmaJgB",  # Adam pre-made voice
         output_format="mp3_22050_32",
         text=text,
-        model_id="eleven_turbo_v2_5",
+        model_id="eleven_turbo_v2_5",  # use the turbo model for low latency
         voice_settings=VoiceSettings(
             stability=0.0,
             similarity_boost=1.0,
@@ -39,18 +47,27 @@ def text_to_speech_base64(text: str) -> str:
         ),
     )
 
+    # Collect all chunks of audio data
     audio_data = BytesIO()
     for chunk in response:
         if chunk:
             audio_data.write(chunk)
     
+    # Reset the buffer position to the start
     audio_data.seek(0)
+
+    # Convert to AudioSegment and set frame rate to 8000 Hz with μ-law encoding
     audio_segment = AudioSegment.from_mp3(audio_data)
     audio_segment = audio_segment.set_frame_rate(8000).set_sample_width(1).set_channels(1)
 
+    # Export audio to a μ-law encoded BytesIO buffer
     ulaw_buffer = BytesIO()
     audio_segment.export(ulaw_buffer, format="wav", codec="pcm_mulaw")
+
+    # Encode to base64
     ulaw_base64 = base64.b64encode(ulaw_buffer.getvalue()).decode("utf-8")
+
+    # Return the base64-encoded string
     return ulaw_base64
 
 def deepgram_connect():
@@ -61,10 +78,12 @@ def deepgram_connect():
     )
     return deepgram_ws
 
+
 conversation_history_map = {}
 
 async def get_openai_response(transcript, streamSid):
     try:
+        
         conversation_history_map[streamSid].append({"role": "user", "content": transcript})
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -78,66 +97,89 @@ async def get_openai_response(transcript, streamSid):
         
         conversation_history_map[streamSid].append({"role": "assistant", "content": response})      
         return response     
+    
     except Exception as e:
         print(f"Error in OpenAI API call:  {e}")
         return "Sorry, I couldn't process the response."
 
-async def deepgram_receiver(deepgram_ws, client_ws, streamSid):
-    async for message in deepgram_ws:
-        try:
-            dg_json = json.loads(message)
-            transcript = dg_json["channel"]["alternatives"][0]["transcript"]
-            if transcript:
-                print(f"[Deepgram Receiver] Transcript: {transcript}")
-                response = await get_openai_response(transcript, streamSid)
-                payload = text_to_speech_base64(response)
-                await client_ws.send(json.dumps({
-                    "event": "media",
-                    "streamSid": streamSid,
-                    "media": {
-                        "payload": payload
-                    }
-                }))
-                await client_ws.send(json.dumps({
-                    "event": "mark",
-                    "streamSid": streamSid,
-                    "mark": {
-                        "name": "response_ends"
-                    }
-                }))
-        except json.JSONDecodeError:
-            print('[Deepgram Receiver] Was not able to parse Deepgram response as JSON.')
-
-async def deepgram_receiver_log(deepgram_ws):
-    async for message in deepgram_ws:
-        try:
-            dg_json = json.loads(message)
-            transcript = dg_json["channel"]["alternatives"][0]["transcript"]
-            if transcript:
-                print(f"[Deepgram Logging Receiver] Transcript: {transcript}")
-        except json.JSONDecodeError:
-            print('[Deepgram Logging Receiver] Was not able to parse Deepgram response as JSON.')
-
 async def proxy(client_ws, path):
     outbox = asyncio.Queue()
+
     audio_cursor = 0.0
     conn_start = time.time()
+
     streamSid = ""
     prompt_count = 0
     
     async with deepgram_connect() as deepgram_ws:
-        await asyncio.gather(
-            deepgram_receiver(deepgram_ws, client_ws, streamSid),
-            deepgram_receiver_log(deepgram_ws),
-        )
-
         async def deepgram_sender(deepgram_ws):
             while True:
                 chunk = await outbox.get()
                 await deepgram_ws.send(chunk)
 
+        async def deepgram_receiver(deepgram_ws, client_ws, streamSid):
+            nonlocal audio_cursor
+            nonlocal prompt_count
+            
+            async for message in deepgram_ws:
+                try:
+                    dg_json = json.loads(message)
+                    transcript = dg_json["channel"]["alternatives"][0]["transcript"]
+                    print(f"transcript : {transcript}")
+                    if transcript:
+                        prompt_count += 1
+                        # Offload the response processing to a separate task
+                        asyncio.create_task(process_transcript(transcript, client_ws, streamSid, prompt_count))
+                        print("ends deepgram receiver")
+                except json.JSONDecodeError:
+                    print('Was not able to parse Deepgram response as JSON.')
+                    continue
+
+        async def process_transcript(transcript, client_ws, streamSid, prompt_count):
+            try:
+                # Clear previous stream if needed
+                if prompt_count > 1:
+                    await client_ws.send(json.dumps({
+                        "event": "clear",
+                        "streamSid": streamSid,
+                    }))
+
+                # Get response from OpenAI and convert to audio payload
+                response = await get_openai_response(transcript, streamSid)
+                payload = text_to_speech_base64(response)
+
+                # Send media event
+                try:
+                    await client_ws.send(json.dumps({
+                        "event": "media",
+                        "streamSid": streamSid,
+                        "media": {
+                            "payload": payload
+                        }
+                    }))
+                except Exception as e:
+                    print("Error sending media message:", e)
+
+                # Send mark event
+                try:
+                    await client_ws.send(json.dumps({
+                        "event": "mark",
+                        "streamSid": streamSid,
+                        "mark": {
+                            "name": "response_ends"
+                        }
+                    }))
+                except Exception as e:
+                    print("Error sending mark message:", e)
+
+                print("Sent message")
+
+            except Exception as e:
+                print("Error processing transcript:", e)
+                
+                
         async def client_receiver(client_ws):
-            nonlocal streamSid
+            nonlocal streamSid 
             nonlocal audio_cursor
             nonlocal prompt_count
             BUFFER_SIZE = 20 * 160
@@ -149,9 +191,7 @@ async def proxy(client_ws, path):
                     if data["event"] in ("connected", "start"):
                         if data['event'] in ("start"):
                             streamSid = data['streamSid']
-                            conversation_history_map[streamSid] = [
-                                {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}
-                            ]
+                            conversation_history_map[streamSid] = [ {"role": "system", "content": "You are a helpful assistant simulating a natural conversation."}]
                         continue
                     if data["event"] == "media":
                         media = data["media"]
@@ -161,10 +201,18 @@ async def proxy(client_ws, path):
                         buffer.extend(chunk)
                         if chunk == b'':
                             empty_byte_received = True
+                                
+                    if data["event"] == "mark": 
+                        try: 
+                            prompt_count -= 1
+                        except Exception as e:
+                            print(e)
+                        
                     if data["event"] == "stop":
                         streamSid = data['streamSid']
                         del conversation_history_map[streamSid]
                         break
+                    
                     if len(buffer) >= BUFFER_SIZE or empty_byte_received:
                         outbox.put_nowait(buffer)
                         buffer = bytearray(b'')
@@ -174,19 +222,37 @@ async def proxy(client_ws, path):
 
             outbox.put_nowait(b'')
 
-        await asyncio.gather(
-            deepgram_sender(deepgram_ws),
-            client_receiver(client_ws),
-        )
+        await asyncio.wait([
+            asyncio.ensure_future(deepgram_sender(deepgram_ws)),
+            asyncio.ensure_future(deepgram_receiver(deepgram_ws)),
+            asyncio.ensure_future(client_receiver(client_ws))
+        ])
+
+        await client_ws.close()
+        del conversation_history_map[streamSid]
+        print('Finished running the proxy')
+
+# async def main():
+#     proxy_server = websockets.serve(proxy, 'localhost', 5000)
+#     await proxy_server
+
+#     await asyncio.Future()  # Keep the server running indefinitely
 
 async def main():
-    port = int(os.environ.get("PORT", 5000))
-    proxy_server = websockets.serve(proxy, '0.0.0.0', port)
+    port = int(os.environ.get("PORT", 5000))  # Default to 5000 if PORT is not set
+    proxy_server = websockets.serve(proxy, '0.0.0.0', port)  # Bind to all interfaces
     await proxy_server
-    await asyncio.Future()
+
+    await asyncio.Future()  # Keep the server running indefinitely
+
 
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         print("Server stopped")
+
+
+
+
+
