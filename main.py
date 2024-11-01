@@ -89,6 +89,7 @@ conversation_history_map = {}
 # For demonstration purposes, let's define them minimally
 client = None  # Replace with your OpenAI client initialization
 
+
 # A simple function to process chunks in a separate thread
 def chunk_processor(chunk_queue):
     while True:
@@ -117,7 +118,7 @@ async def get_openai_response(transcript, streamSid):
         conversation_history_map[streamSid].append({"role": "user", "content": transcript})
 
         # Create the chat completion stream
-        stream = client.chat.completions.create(
+        stream = client.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=conversation_history_map[streamSid],
             stream=True,
@@ -135,16 +136,16 @@ async def get_openai_response(transcript, streamSid):
                 # Yield and enqueue 20 chunks at a time
                 if chunk_count == 20:
                     combined_chunk = ''.join(chunk_buffer)
-                    yield combined_chunk  # Yield the concatenated chunks
                     chunk_queue.put(combined_chunk)  # Enqueue for processing
+                    print(f"Sent chunk: {combined_chunk}")  # Print the sent message immediately
                     chunk_buffer = []  # Reset the buffer
                     chunk_count = 0  # Reset the chunk count
 
         # After finishing the stream, yield any remaining chunks
         if chunk_buffer:
             combined_chunk = ''.join(chunk_buffer)
-            yield combined_chunk
             chunk_queue.put(combined_chunk)  # Enqueue for processing
+            print(f"Sent chunk: {combined_chunk}")  # Print the last sent message
 
         # Append the full response to the conversation history
         full_response = ''.join(
@@ -156,6 +157,10 @@ async def get_openai_response(transcript, streamSid):
         print(f"Error in OpenAI API call: {e}")
         time.sleep(10)
         yield "Sorry, I couldn't process your request."
+
+def run_openai_response(transcript, streamSid):
+    """Run the OpenAI response function in an asyncio loop."""
+    asyncio.run(get_openai_response(transcript, streamSid))
 
 async def proxy(client_ws, path):
     outbox = asyncio.Queue()
@@ -200,9 +205,9 @@ async def proxy(client_ws, path):
                         "streamSid": streamSid,
                         }))
                     
-            async for response_chunk in get_openai_response(transcript, streamSid):
-                print(f"Received chunk: {response_chunk}")
-                chunk_queue.put(response_chunk)
+             # Start a new thread for the OpenAI response function
+            openai_thread = threading.Thread(target=run_openai_response, args=(transcript, streamSid))
+            openai_thread.start()
                 
             # payload =  text_to_speech_base64(response)
             # try:
