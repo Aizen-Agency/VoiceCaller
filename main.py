@@ -135,42 +135,43 @@ async def proxy(client_ws, path):
 
 
         async def handle_response(transcript):
+            nonlocal prompt_count
               # Get response from OpenAI API
-                        prompt_count += 1
-                        if prompt_count > 1:
-                             await client_ws.send(json.dumps({ 
-                                    "event": "clear",
-                                    "streamSid": streamSid,
-                                    }))
-                             
-                        response = await get_openai_response(transcript, streamSid)
-                        payload =  text_to_speech_base64(response)
-                        try:
-                            
-                           await client_ws.send(json.dumps({
-                            "event": "media",
-                            "streamSid": streamSid,
-                            "media": {
-                                "payload": payload
-                            }
+            prompt_count += 1
+            if prompt_count > 1:
+                    await client_ws.send(json.dumps({ 
+                        "event": "clear",
+                        "streamSid": streamSid,
                         }))
-                        except Exception as e:
-                            print("Error sending message:", e)
-                            
-                        try:
-                            
-                           await client_ws.send(json.dumps({ 
-                                "event": "mark",
-                                "streamSid": streamSid,
-                                "mark": {
-                                "name": transcript
-                                }
-                                }))
-                        except Exception as e:
-                            print("Error sending message: ", e)
-                        
-                        print("sent message")
-                        
+                    
+            response = await get_openai_response(transcript, streamSid)
+            payload =  text_to_speech_base64(response)
+            try:
+                
+                await client_ws.send(json.dumps({
+                "event": "media",
+                "streamSid": streamSid,
+                "media": {
+                    "payload": payload
+                }
+            }))
+            except Exception as e:
+                print("Error sending message:", e)
+                
+            try:
+                
+                await client_ws.send(json.dumps({ 
+                    "event": "mark",
+                    "streamSid": streamSid,
+                    "mark": {
+                    "name": transcript
+                    }
+                    }))
+            except Exception as e:
+                print("Error sending message: ", e)
+            
+            print("sent message")
+            
 
 
         async def client_receiver(client_ws):
