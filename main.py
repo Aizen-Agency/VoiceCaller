@@ -98,7 +98,7 @@ def chunk_processor(chunk_queue):
             break
         # Simulate processing the chunk
         print(f"Processing chunk: {chunk}")
-        time.sleep(10)  # Simulate time taken to process the chunk
+        time.sleep(1)  # Simulate time taken to process the chunk
         chunk_queue.task_done()
 
 # Initialize the chunk queue
@@ -128,7 +128,7 @@ async def get_openai_response(transcript, streamSid):
         chunk_count = 0
 
         # Process the stream and collect chunks
-        for chunk in stream:
+        async for chunk in stream:  # Use async for to handle the stream
             if chunk.choices[0].delta.content is not None:
                 chunk_buffer.append(chunk.choices[0].delta.content)
                 chunk_count += 1
@@ -141,7 +141,7 @@ async def get_openai_response(transcript, streamSid):
                     chunk_buffer = []  # Reset the buffer
                     chunk_count = 0  # Reset the chunk count
 
-        # After finishing the stream, yield any remaining chunks
+        # After finishing the stream, enqueue any remaining chunks
         if chunk_buffer:
             combined_chunk = ''.join(chunk_buffer)
             chunk_queue.put(combined_chunk)  # Enqueue for processing
@@ -155,12 +155,12 @@ async def get_openai_response(transcript, streamSid):
 
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
-        time.sleep(10)
         yield "Sorry, I couldn't process your request."
 
-def run_openai_response(transcript, streamSid):
+async def run_openai_response(transcript, streamSid):
     """Run the OpenAI response function in an asyncio loop."""
-    asyncio.run(get_openai_response(transcript, streamSid))
+    async for chunk in get_openai_response(transcript, streamSid):
+        chunk_queue.put(chunk)  # Enqueue the chunk for processing
 
 async def proxy(client_ws, path):
     outbox = asyncio.Queue()
@@ -206,8 +206,9 @@ async def proxy(client_ws, path):
                         }))
                     
              # Start a new thread for the OpenAI response function
-            openai_thread = threading.Thread(target=run_openai_response, args=(transcript, streamSid))
+            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid)))
             openai_thread.start()
+
                 
             # payload =  text_to_speech_base64(response)
             # try:
