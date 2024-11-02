@@ -18,6 +18,7 @@ import threading
 import queue
 import time
 import re  # Import regex module to detect sentence-ending punctuation
+import boto3
 
 
 # Load environment variables from .env file
@@ -27,6 +28,10 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+
+AWS_ACCESS_KEY_ID= os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = os.getenv("AWS_REGION")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 # openai.api_key = OPENAI_API_KEY
@@ -75,6 +80,46 @@ def text_to_speech_base64(text: str) -> str:
     # Return the base64-encoded string
     return ulaw_base64
 
+
+
+
+def text_to_speech_base64_poly(text: str) -> str:
+    # Initialize the Polly client with credentials
+    polly_client = boto3.client(
+        'polly',
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=AWS_REGION
+    )
+
+    # Request text-to-speech conversion from Polly
+    response = polly_client.synthesize_speech(
+        Text=text,
+        VoiceId='Matthew',  # You can use any other Polly voice
+        OutputFormat='mp3',
+        Engine='standard'  # 'neural' engine can also be used if available
+    )
+
+    # Read audio data from the response stream
+    audio_data = BytesIO(response['AudioStream'].read())
+
+    # Convert to AudioSegment and set frame rate to 8000 Hz with μ-law encoding
+    audio_segment = AudioSegment.from_mp3(audio_data)
+    audio_segment = audio_segment.set_frame_rate(8000).set_sample_width(1).set_channels(1)
+
+    # Export audio to a μ-law encoded BytesIO buffer
+    ulaw_buffer = BytesIO()
+    audio_segment.export(ulaw_buffer, format="wav", codec="pcm_mulaw")
+
+    # Encode to base64
+    ulaw_base64 = base64.b64encode(ulaw_buffer.getvalue()).decode("utf-8")
+
+    # Return the base64-encoded string
+    return ulaw_base64
+
+
+
+
 def deepgram_connect():
     extra_headers = {'Authorization': f'Token {DEEPGRAM_API_KEY}'}
     deepgram_ws = websockets.connect(
@@ -92,7 +137,7 @@ async def process_chunk(chunk, streamSid, client_ws):
     # Your asynchronous processing logic here
     # For example, you might want to perform an I/O operation or a database call
     print(f"processing: {chunk}")
-    payload =  text_to_speech_base64(chunk)
+    payload =  text_to_speech_base64_poly(chunk)
     try:
         await client_ws.send(json.dumps({
                 "event": "media",
