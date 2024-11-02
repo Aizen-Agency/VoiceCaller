@@ -265,7 +265,7 @@ async def proxy(client_ws, path):
               # Get response from OpenAI API
             prompt_count += 1
             if prompt_count > 1:
-                print(f"stopppinnnnnnnggg   :  {prompt_count}")
+                print(f"stopppinnnnnnngggg   :  {prompt_count}")
                 stop_event.set()
                 time.sleep(3)
                 stop_event.clear()
