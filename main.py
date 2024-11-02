@@ -45,7 +45,7 @@ elevenlabsclient = ElevenLabs(
 def text_to_speech_base64(text: str) -> str:
     # Calling the text_to_speech conversion API with detailed parameters
     response = elevenlabsclient.text_to_speech.convert(
-        voice_id="pNInz6obpgDQGcFmaJgB",  # Adam pre-made voice
+        voice_id="pMsXgVXv3BLzUgSXRplE",  # Adam pre-made voice
         output_format="mp3_22050_32",
         text=text,
         model_id="eleven_turbo_v2_5",  # use the turbo model for low latency
@@ -137,7 +137,7 @@ async def process_chunk(chunk, streamSid, client_ws):
     # Your asynchronous processing logic here
     # For example, you might want to perform an I/O operation or a database call
     print(f"processing: {chunk}")
-    payload =  text_to_speech_base64_poly(chunk)
+    payload =  text_to_speech_base64(chunk)
     try:
         await client_ws.send(json.dumps({
                 "event": "media",
