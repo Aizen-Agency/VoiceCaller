@@ -129,7 +129,8 @@ def deepgram_connect():
     return deepgram_ws
 
 
-
+conversation_history_map = {}
+stop_event = threading.Event() 
 
 
 async def process_chunk(chunk, streamSid, client_ws):
@@ -160,7 +161,67 @@ async def process_chunk(chunk, streamSid, client_ws):
     
 
 
+async def get_openai_response(transcript, streamSid, client_ws):
+    global stop_event 
+    try:
+        # Update the conversation history for the user
+        if streamSid not in conversation_history_map:
+            conversation_history_map[streamSid] = []  # Initialize if not present
 
+        conversation_history_map[streamSid].append({"role": "user", "content": transcript})
+
+        # Create the chat completion stream
+        stream = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=conversation_history_map[streamSid],
+            stream=True,
+        )
+
+        chunk_buffer = []
+
+        # Process the stream and collect chunks
+        for chunk in stream:  # Use a regular for loop since stream is not async
+            if stop_event.is_set():  # Check if the stop signal has been set
+                print("Stopping OpenAI request processing.")
+                break 
+            
+            if chunk.choices[0].delta.content is not None:
+                chunk_buffer.append(chunk.choices[0].delta.content)
+                combined_chunk = ''.join(chunk_buffer)
+                
+                # Check if `combined_chunk` ends with a sentence-ending punctuation mark
+                if re.search(r'[.,!?;:]$', combined_chunk):
+                    print(f"Sent chunk: {combined_chunk}")
+                    await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
+                    chunk_buffer = []  # Reset the buffer
+
+        print("___________Came out of for loop____________")
+        # After finishing the stream, enqueue any remaining chunks
+        if chunk_buffer and not stop_event.is_set():
+            combined_chunk = ''.join(chunk_buffer)
+            print(f"Sent chunk: {combined_chunk}")
+            await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function for the last chunk
+
+        # Append the full response to the conversation history
+        full_response = ''.join(
+            [chunk.choices[0].delta.content for chunk in stream if chunk.choices[0].delta.content is not None]
+        )
+        conversation_history_map[streamSid].append({"role": "assistant", "content": full_response})
+        await client_ws.send(json.dumps({ 
+            "event": "mark",
+            "streamSid": streamSid,
+            "mark": {
+                "name": "ends"
+            }
+        }))
+
+    except Exception as e:
+        print(f"Error in OpenAI API call: {e}")
+
+
+def run_openai_response(transcript, streamSid, client_ws):
+    """Run the OpenAI response function in an asyncio loop."""
+    asyncio.run(get_openai_response(transcript, streamSid, client_ws))
 
 
 async def proxy(client_ws, path):
@@ -171,79 +232,6 @@ async def proxy(client_ws, path):
 
     streamSid = ""
     prompt_count = 0
-    
-    conversation_history_map = {}
-    stop_event = threading.Event() 
-    
-    async def get_openai_response(transcript):
-        nonlocal stop_event 
-        nonlocal prompt_count
-        try:
-            # Update the conversation history for the user
-            if streamSid not in conversation_history_map:
-                conversation_history_map[streamSid] = []  # Initialize if not present
-
-            conversation_history_map[streamSid].append({"role": "user", "content": transcript})
-
-            # Create the chat completion stream
-            stream = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=conversation_history_map[streamSid],
-                stream=True,
-            )
-
-            chunk_buffer = []
-
-            # Process the stream and collect chunks
-            for chunk in stream:  # Use a regular for loop since stream is not async
-                if stop_event.is_set():  # Check if the stop signal has been set
-                    print("Stopping OpenAI request processing.")
-                    await client_ws.send(json.dumps({ 
-                                        "event": "clear",
-                                        "streamSid": streamSid,
-                                    }))
-                    prompt_count = 1
-                    stop_event.clear()
-                    break 
-                
-                if chunk.choices[0].delta.content is not None:
-                    chunk_buffer.append(chunk.choices[0].delta.content)
-                    combined_chunk = ''.join(chunk_buffer)
-                    
-                    # Check if `combined_chunk` ends with a sentence-ending punctuation mark
-                    if re.search(r'[.,!?;:]$', combined_chunk):
-                        print(f"Sent chunk: {combined_chunk}")
-                        await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
-                        chunk_buffer = []  # Reset the buffer
-
-            print("___________Came out of for loop____________")
-            # After finishing the stream, enqueue any remaining chunks
-            if chunk_buffer and not stop_event.is_set():
-                combined_chunk = ''.join(chunk_buffer)
-                print(f"Sent chunk: {combined_chunk}")
-                await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function for the last chunk
-
-            # Append the full response to the conversation history
-            full_response = ''.join(
-                [chunk.choices[0].delta.content for chunk in stream if chunk.choices[0].delta.content is not None]
-            )
-            conversation_history_map[streamSid].append({"role": "assistant", "content": full_response})
-            await client_ws.send(json.dumps({ 
-                "event": "mark",
-                "streamSid": streamSid,
-                "mark": {
-                    "name": "ends"
-                }
-            }))
-
-        except Exception as e:
-            print(f"Error in OpenAI API call: {e}")
-
-
-    def run_openai_response(transcript, streamSid, client_ws):
-        """Run the OpenAI response function in an asyncio loop."""
-        asyncio.run(get_openai_response(transcript))
-    
     
     async with deepgram_connect() as deepgram_ws:
         async def deepgram_sender(deepgram_ws):
@@ -275,8 +263,13 @@ async def proxy(client_ws, path):
             if prompt_count > 1:
                 print(f"stopppinnnnnnngggg   :  {prompt_count}")
                 stop_event.set()
-                # time.sleep(3)
-                # stop_event.clear()
+                time.sleep(3)
+                stop_event.clear()
+                prompt_count = 1
+                await client_ws.send(json.dumps({ 
+                        "event": "clear",
+                        "streamSid": streamSid,
+                    }))
                     
              # Start a new thread for the OpenAI response function
             openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid, client_ws)))
@@ -311,18 +304,9 @@ async def proxy(client_ws, path):
                                 
                     if data["event"] == "mark": 
                         try: 
-                            print(f"mark : {data["mark"]["name"]}")
-                            if stop_event.is_set():
-                                await client_ws.send(json.dumps({ 
-                                    "event": "clear",
-                                    "streamSid": streamSid,
-                                }))
-                                prompt_count = 1
-                                stop_event.clear()
-                                
                             if data['mark']['name'] == "ends":
                                 prompt_count -= 1
-                                
+                            print(f"mark : {data["mark"]["name"]}")
                         except Exception as e:
                             print(e)
                         
