@@ -183,10 +183,6 @@ async def get_openai_response(transcript, streamSid, client_ws):
         for chunk in stream:  # Use a regular for loop since stream is not async
             if stop_event.is_set():  # Check if the stop signal has been set
                 print("Stopping OpenAI request processing.")
-                await client_ws.send(json.dumps({ 
-                    "event": "clear",
-                    "streamSid": streamSid,
-                }))
                 break 
             
             if chunk.choices[0].delta.content is not None:
@@ -269,11 +265,6 @@ async def proxy(client_ws, path):
                 stop_event.set()
                 time.sleep(3)
                 stop_event.clear()
-                prompt_count = 1
-                await client_ws.send(json.dumps({ 
-                        "event": "clear",
-                        "streamSid": streamSid,
-                    }))
                     
              # Start a new thread for the OpenAI response function
             openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid, client_ws)))
