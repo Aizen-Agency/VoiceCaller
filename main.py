@@ -270,8 +270,10 @@ async def proxy(client_ws, path):
                         "event": "clear",
                         "streamSid": streamSid,
                     }))
-                    
-             # Start a new thread for the OpenAI response function
+                  
+             
+            print(f"Active threads before creating a new one: {threading.active_count()}")
+            # Start a new thread for the OpenAI response function
             openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid, client_ws)))
             openai_thread.start()
 
