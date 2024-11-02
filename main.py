@@ -308,6 +308,7 @@ async def proxy(client_ws, path):
                                 
                     if data["event"] == "mark": 
                         try: 
+                            print(f"mark : {data["mark"]["name"]}  {prompt_count}  clearing")
                             if prompt_count > 1:
                                 await client_ws.send(json.dumps({ 
                                     "event": "clear",
@@ -316,7 +317,7 @@ async def proxy(client_ws, path):
                                 prompt_count = 1
                             if data['mark']['name'] == "ends":
                                 prompt_count -= 1
-                            print(f"mark : {data["mark"]["name"]}")
+                                
                         except Exception as e:
                             print(e)
                         
