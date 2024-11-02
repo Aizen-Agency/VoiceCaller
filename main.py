@@ -157,7 +157,7 @@ async def process_chunk(chunk, streamSid, client_ws):
                 print("Error sending message: ", e)
                 
             
-    print("sent message")
+    print("sent message.")
     
 
 
