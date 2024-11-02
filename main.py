@@ -146,13 +146,13 @@ async def process_chunk(chunk, streamSid, client_ws):
                     "payload": payload
                 }
             }))
-        await client_ws.send(json.dumps({ 
-                    "event": "mark",
-                    "streamSid": streamSid,
-                    "mark": {
-                    "name": chunk
-                    }
-                    }))
+        # await client_ws.send(json.dumps({ 
+        #             "event": "mark",
+        #             "streamSid": streamSid,
+        #             "mark": {
+        #             "name": chunk
+        #             }
+        #             }))
     except Exception as e:
                 print("Error sending message: ", e)
                 
