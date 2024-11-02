@@ -269,6 +269,7 @@ async def proxy(client_ws, path):
                 stop_event.set()
                 time.sleep(2)
                 stop_event.clear()
+                prompt_count = 1
                 await client_ws.send(json.dumps({ 
                         "event": "clear",
                         "streamSid": streamSid,
@@ -307,6 +308,12 @@ async def proxy(client_ws, path):
                                 
                     if data["event"] == "mark": 
                         try: 
+                            if prompt_count > 1:
+                                await client_ws.send(json.dumps({ 
+                                    "event": "clear",
+                                    "streamSid": streamSid,
+                                }))
+                                prompt_count = 1
                             if data['mark']['name'] == "ends":
                                 prompt_count -= 1
                             print(f"mark : {data["mark"]["name"]}")
