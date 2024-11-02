@@ -109,7 +109,7 @@ async def process_chunk(chunk, streamSid, client_ws):
                     }
                     }))
     except Exception as e:
-                print("Error sending message:", e)
+                print("Error sending message: ", e)
                 
             
     print("sent message")
