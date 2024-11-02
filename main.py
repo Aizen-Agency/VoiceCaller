@@ -207,7 +207,7 @@ async def get_openai_response(transcript, streamSid, client_ws):
             [chunk.choices[0].delta.content for chunk in stream if chunk.choices[0].delta.content is not None]
         )
         conversation_history_map[streamSid].append({"role": "assistant", "content": full_response})
-        await client_ws.send(json.dumps({ 
+        return await client_ws.send(json.dumps({ 
             "event": "mark",
             "streamSid": streamSid,
             "mark": {
@@ -215,7 +215,6 @@ async def get_openai_response(transcript, streamSid, client_ws):
             }
         }))
 
-        pass
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
 
