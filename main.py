@@ -17,6 +17,7 @@ from pydub import AudioSegment
 import threading
 import queue
 import time
+import re  # Import regex module to detect sentence-ending punctuation
 
 
 # Load environment variables from .env file
@@ -86,51 +87,6 @@ def deepgram_connect():
 conversation_history_map = {}
 stop_event = threading.Event() 
 
-# Assuming conversation_history_map and client are defined somewhere in your code
-# For demonstration purposes, let's define them minimally # Replace with your OpenAI client initialization
-
-# A simple function to process chunks in a separate thread
-async def chunk_processor(chunk_queue):
-    while True:
-        chunk = chunk_queue.get()
-        if chunk is None:  # A sentinel value to exit the loop
-            break
-        # Simulate processing the chunk
-        print(f"Processing chunk: {chunk}")
-        
-        payload =  text_to_speech_base64(chunk)
-        time.sleep(2)
-        # try:
-        #     await client_ws.send(json.dumps({
-        #         "event": "media",
-        #         "streamSid": streamSid,
-        #         "media": {
-        #             "payload": payload
-        #         }
-        #     }))
-        #     await client_ws.send(json.dumps({ 
-        #             "event": "mark",
-        #             "streamSid": streamSid,
-        #             "mark": {
-        #             "name": transcript
-        #             }
-        #             }))
-        # except Exception as e:
-        #         print("Error sending message:", e)
-                
-            
-        print("sent message")
-        
-        
-        chunk_queue.task_done()
-
-# Initialize the chunk queue
-chunk_queue = queue.Queue()
-
-# Start the chunk processing thread
-processing_thread = threading.Thread(target=chunk_processor, args=(chunk_queue,))
-processing_thread.daemon = True  # Make the thread a daemon thread
-processing_thread.start()
 
 async def process_chunk(chunk, streamSid, client_ws):
     # Your asynchronous processing logic here
@@ -159,6 +115,7 @@ async def process_chunk(chunk, streamSid, client_ws):
     print("sent message")
     
 
+
 async def get_openai_response(transcript, streamSid, client_ws):
     global stop_event 
     try:
@@ -176,30 +133,26 @@ async def get_openai_response(transcript, streamSid, client_ws):
         )
 
         chunk_buffer = []
-        chunk_count = 0
 
         # Process the stream and collect chunks
         for chunk in stream:  # Use a regular for loop since stream is not async
             if stop_event.is_set():  # Check if the stop signal has been set
                 print("Stopping OpenAI request processing.")
                 await client_ws.send(json.dumps({ 
-                        "event": "clear",
-                        "streamSid": streamSid,
-                    }))
+                    "event": "clear",
+                    "streamSid": streamSid,
+                }))
                 break 
             
             if chunk.choices[0].delta.content is not None:
                 chunk_buffer.append(chunk.choices[0].delta.content)
-                chunk_count += 1
-
-                # Enqueue and print 20 chunks at a time
-                if chunk_count == 20:
-                    combined_chunk = ''.join(chunk_buffer)
+                combined_chunk = ''.join(chunk_buffer)
+                
+                # Check if `combined_chunk` ends with a sentence-ending punctuation mark
+                if re.search(r'[.,!?;:]$', combined_chunk):
                     print(f"Sent chunk: {combined_chunk}")
                     await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
-                     # Print the sent message immediately
                     chunk_buffer = []  # Reset the buffer
-                    chunk_count = 0  # Reset the chunk count
 
         print("___________Came out of for loop____________")
         # After finishing the stream, enqueue any remaining chunks
@@ -207,7 +160,6 @@ async def get_openai_response(transcript, streamSid, client_ws):
             combined_chunk = ''.join(chunk_buffer)
             print(f"Sent chunk: {combined_chunk}")
             await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function for the last chunk
-            #print(f"Sent chunk: {combined_chunk}")  # Print the last sent message
 
         # Append the full response to the conversation history
         full_response = ''.join(
@@ -215,12 +167,12 @@ async def get_openai_response(transcript, streamSid, client_ws):
         )
         conversation_history_map[streamSid].append({"role": "assistant", "content": full_response})
         await client_ws.send(json.dumps({ 
-                    "event": "mark",
-                    "streamSid": streamSid,
-                    "mark": {
-                    "name": "ends"
-                    }
-                    }))
+            "event": "mark",
+            "streamSid": streamSid,
+            "mark": {
+                "name": "ends"
+            }
+        }))
 
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
