@@ -6,3 +6,4 @@ python-dotenv
 uuid
 elevenlabs
 pydub
+boto3
