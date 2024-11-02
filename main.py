@@ -215,6 +215,7 @@ async def get_openai_response(transcript, streamSid, client_ws):
             }
         }))
 
+        pass
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
 
