@@ -19,6 +19,7 @@ import queue
 import time
 import re  # Import regex module to detect sentence-ending punctuation
 import boto3
+import audioop
 
 
 # Load environment variables from .env file
@@ -62,10 +63,10 @@ def text_to_speech_base64(text: str) -> str:
         if chunk:
             audio_data.write(chunk)
 
-    # Convert MP3 audio data to AudioSegment, set to 8000 Hz, 1 channel, μ-law
+    # Convert MP3 audio data to AudioSegment, set to 8000 Hz, 1 channel, 16-bit PCM
     audio_data.seek(0)
     audio_segment = AudioSegment.from_mp3(audio_data)
-    audio_segment = audio_segment.set_frame_rate(8000).set_sample_width(1).set_channels(1)
+    audio_segment = audio_segment.set_frame_rate(8000).set_sample_width(2).set_channels(1)
 
     # Split audio on silence and recombine to remove long pauses
     chunks = silence.split_on_silence(
@@ -80,15 +81,18 @@ def text_to_speech_base64(text: str) -> str:
     for chunk in chunks:
         trimmed_audio += chunk
 
-    # Export audio as μ-law raw data to a buffer without headers
-    ulaw_buffer = BytesIO()
-    trimmed_audio.export(ulaw_buffer, format="raw", codec="pcm_mulaw")
+    # Export audio as raw PCM (s16le) without headers
+    pcm_buffer = BytesIO()
+    trimmed_audio.export(pcm_buffer, format="s16le")
 
-    # Encode raw audio data in base64
-    ulaw_base64 = base64.b64encode(ulaw_buffer.getvalue()).decode("utf-8")
+    # Convert PCM to μ-law encoding
+    pcm_data = pcm_buffer.getvalue()
+    ulaw_data = audioop.lin2ulaw(pcm_data, 2)  # 2 bytes for 16-bit PCM
+
+    # Encode μ-law data in base64
+    ulaw_base64 = base64.b64encode(ulaw_data).decode("utf-8")
 
     return ulaw_base64
-
 
 def text_to_speech_base64_poly(text: str) -> str:
     # Initialize the Polly client with credentials
