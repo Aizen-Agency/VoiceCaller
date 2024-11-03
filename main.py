@@ -151,25 +151,23 @@ async def process_chunk(chunk, streamSid, client_ws):
     # For example, you might want to perform an I/O operation or a database call
     print(f"processing: {chunk}")
     payload =  text_to_speech_base64(chunk)
-    while stop_event.is_set():
-        await asyncio.sleep(0.5)
-        
     try:
-        stop_event.clear()
-        await client_ws.send(json.dumps({
-                "event": "media",
-                "streamSid": streamSid,
-                "media": {
-                    "payload": payload
-                }
-            }))
-        await client_ws.send(json.dumps({ 
-                    "event": "mark",
+        if not stop_event.is_set():
+                        
+            await client_ws.send(json.dumps({
+                    "event": "media",
                     "streamSid": streamSid,
-                    "mark": {
-                    "name": chunk
+                    "media": {
+                        "payload": payload
                     }
-                    }))
+                }))
+            await client_ws.send(json.dumps({ 
+                        "event": "mark",
+                        "streamSid": streamSid,
+                        "mark": {
+                        "name": chunk
+                        }
+                        }))
     except Exception as e:
                 print("Error sending message: ", e)
                 
@@ -202,7 +200,6 @@ async def get_openai_response(transcript, streamSid, client_ws):
         for chunk in stream:  # Use a regular for loop since stream is not async
             if stop_event.is_set():  # Check if the stop signal has been set
                 print("Stopping OpenAI request processing.")
-                stop_event.clear()
                 break 
             
             if chunk.choices[0].delta.content is not None:
@@ -230,13 +227,14 @@ async def get_openai_response(transcript, streamSid, client_ws):
         )
         conversation_history_map[streamSid].append({"role": "assistant", "content": full_response})
         full_response_chunks.clear()
-        return await client_ws.send(json.dumps({ 
-            "event": "mark",
-            "streamSid": streamSid,
-            "mark": {
-                "name": "ends"
-            }
-        }))
+        stop_event.clear()
+        # return await client_ws.send(json.dumps({ 
+        #     "event": "mark",
+        #     "streamSid": streamSid,
+        #     "mark": {
+        #         "name": "ends"
+        #     }
+        # }))
 
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
@@ -289,6 +287,13 @@ async def proxy(client_ws, path):
             global transcript_buffer, last_update_time
               # Get response from OpenAI API
                 # Add the transcript to the buffer
+                
+            stop_event.set()
+            await client_ws.send(json.dumps({ 
+                            "event": "clear",
+                            "streamSid": streamSid,
+                        }))
+            
             with buffer_lock:
                 transcript_buffer.append(transcript)
                 last_update_time = time.monotonic()  # Update the timestamp of the last addition
@@ -296,24 +301,25 @@ async def proxy(client_ws, path):
             await asyncio.sleep(3)
             time_duration = time.monotonic() - last_update_time
             print(f"time duration:  { time_duration}  -- {transcript}")
-            await client_ws.send(json.dumps({ 
-                            "event": "clear",
-                            "streamSid": streamSid,
-                        }))
+            
+            
             if time_duration > 3: 
-                prompt_count += 1
-                if prompt_count > 1:
-                    print(f"stopppinnnnnnngggg   :  {prompt_count}")
-                    stop_event.set()
-                    prompt_count = 1
-                    await client_ws.send(json.dumps({ 
-                            "event": "clear",
-                            "streamSid": streamSid,
-                        }))
+                # prompt_count += 1
+                # if prompt_count > 1:
+                #     print(f"stopppinnnnnnngggg   :  {prompt_count}")
+                #     time.sleep(3)
+                #     stop_event.clear()
+                #     prompt_count = 1
+                #     await client_ws.send(json.dumps({ 
+                #             "event": "clear",
+                #             "streamSid": streamSid,
+                #         }))
                     
                 concatenated_transcript = " ".join(transcript_buffer)
                 print(f"Active threads before creating a new one: {threading.active_count()}")
                 # Start a new thread for the OpenAI response function
+                while stop_event.is_set():
+                    print("in set check loop")
                 print(f"_________  {concatenated_transcript}")
                 openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
                 openai_thread.start()
@@ -350,8 +356,8 @@ async def proxy(client_ws, path):
                                 
                     if data["event"] == "mark": 
                         try: 
-                            if data['mark']['name'] == "ends":
-                                prompt_count -= 1
+                            # if data['mark']['name'] == "ends":
+                            #     prompt_count -= 1
                             print(f"mark : {data['mark']['name']}")
                         except Exception as e:
                             print(e)
