@@ -152,7 +152,12 @@ async def process_chunk(chunk, streamSid, client_ws):
     print(f"processing: {chunk}")
     payload =  text_to_speech_base64(chunk)
     try:
-        if not stop_event.is_set():
+        if stop_event.is_set():
+            await client_ws.send(json.dumps({ 
+                            "event": "clear",
+                            "streamSid": streamSid,
+                        }))
+        else:
             await client_ws.send(json.dumps({
                     "event": "media",
                     "streamSid": streamSid,
@@ -202,16 +207,15 @@ async def get_openai_response(transcript, streamSid, client_ws):
                 break 
             
             if chunk.choices[0].delta.content is not None:
-                if not stop_event.is_set():
-                    chunk_buffer.append(chunk.choices[0].delta.content)
-                    combined_chunk = ''.join(chunk_buffer)
-                    
-                    # Check if `combined_chunk` ends with a sentence-ending punctuation mark
-                    if re.search(r'[.,!?;:]$', combined_chunk):
-                        print(f"Sent chunk: {combined_chunk}")
-                        full_response_chunks.append(combined_chunk)
-                        await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
-                        chunk_buffer = []  # Reset the buffer
+                chunk_buffer.append(chunk.choices[0].delta.content)
+                combined_chunk = ''.join(chunk_buffer)
+                
+                # Check if `combined_chunk` ends with a sentence-ending punctuation mark
+                if re.search(r'[.,!?;:]$', combined_chunk):
+                    print(f"Sent chunk: {combined_chunk}")
+                    full_response_chunks.append(combined_chunk)
+                    await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
+                    chunk_buffer = []  # Reset the buffer
 
         print("___________Came out of for loop____________")
         # After finishing the stream, enqueue any remaining chunks
@@ -303,7 +307,7 @@ async def proxy(client_ws, path):
                             "streamSid": streamSid,
                         }))
                     stop_event.set()
-                    time.sleep(1)
+                    time.sleep(3)
                     stop_event.clear()
                     prompt_count = 1
                     
