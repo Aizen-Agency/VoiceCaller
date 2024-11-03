@@ -278,7 +278,11 @@ async def proxy(client_ws, path):
             nonlocal prompt_count
             global transcript_buffer, last_update_time
               # Get response from OpenAI API
-              
+                # Add the transcript to the buffer
+            with buffer_lock:
+                transcript_buffer.append(transcript)
+                last_update_time = time.monotonic()  # Update the timestamp of the last addition
+                
             prompt_count += 1
             if prompt_count > 1:
                 print(f"stopppinnnnnnngggg   :  {prompt_count}")
@@ -291,10 +295,10 @@ async def proxy(client_ws, path):
                         "streamSid": streamSid,
                     }))
                 
-            # concatenated_transcript = " ".join(transcript_buffer)
+            concatenated_transcript = " ".join(transcript_buffer)
             print(f"Active threads before creating a new one: {threading.active_count()}")
             # Start a new thread for the OpenAI response function
-            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid, client_ws)))
+            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
             openai_thread.start()
             
             # # Add the transcript to the buffer
