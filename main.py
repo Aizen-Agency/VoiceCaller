@@ -246,6 +246,9 @@ async def proxy(client_ws, path):
     streamSid = ""
     prompt_count = 0
     
+    final_transcript = ""
+    
+    
     async with deepgram_connect() as deepgram_ws:
         async def deepgram_sender(deepgram_ws):
             while True:
@@ -255,11 +258,15 @@ async def proxy(client_ws, path):
         async def deepgram_receiver(deepgram_ws):
             nonlocal audio_cursor
             nonlocal prompt_count
+            nonlocal final_transcript
             async for message in deepgram_ws:
                 try:
                     dg_json = json.loads(message)
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
                     print(f"transcript : {transcript}")
+                    final_transcript = final_transcript + " " + transcript
+                    time.sleep(10)
+                    print(f"transcript final : {final_transcript}")
                     if transcript:
                         asyncio.create_task(handle_response(transcript=transcript))
                         
