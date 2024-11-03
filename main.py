@@ -19,7 +19,7 @@ import queue
 import time
 import re  # Import regex module to detect sentence-ending punctuation
 import boto3
-import audioop
+import numpy as np
 
 
 # Load environment variables from .env file
@@ -41,6 +41,16 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 elevenlabsclient = ElevenLabs(
     api_key=ELEVENLABS_API_KEY,
 )
+
+
+def mu_law_encode(audio, quantization_channels=256):
+    """Apply μ-law encoding to the audio."""
+    mu = quantization_channels - 1
+    # Perform μ-law companding transformation
+    magnitude = np.log1p(mu * np.abs(audio)) / np.log1p(mu)
+    signal = np.sign(audio) * magnitude
+    # Quantize signal to the integer range
+    return ((signal + 1) / 2 * mu + 0.5).astype(np.uint8)
 
 def text_to_speech_base64(text: str) -> str:
     # Call the Eleven Labs text-to-speech API
@@ -81,18 +91,19 @@ def text_to_speech_base64(text: str) -> str:
     for chunk in chunks:
         trimmed_audio += chunk
 
-    # Export audio as raw PCM (s16le) without headers
+    # Export audio to raw PCM bytes
     pcm_buffer = BytesIO()
     trimmed_audio.export(pcm_buffer, format="s16le")
+    pcm_data = np.frombuffer(pcm_buffer.getvalue(), dtype=np.int16)
 
-    # Convert PCM to μ-law encoding
-    pcm_data = pcm_buffer.getvalue()
-    ulaw_data = audioop.lin2ulaw(pcm_data, 2)  # 2 bytes for 16-bit PCM
+    # Apply μ-law encoding
+    ulaw_encoded = mu_law_encode(pcm_data / 32768.0)  # Normalize to [-1, 1] before encoding
 
     # Encode μ-law data in base64
-    ulaw_base64 = base64.b64encode(ulaw_data).decode("utf-8")
+    ulaw_base64 = base64.b64encode(ulaw_encoded).decode("utf-8")
 
     return ulaw_base64
+
 
 def text_to_speech_base64_poly(text: str) -> str:
     # Initialize the Polly client with credentials

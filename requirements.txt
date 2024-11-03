@@ -7,4 +7,3 @@ uuid
 elevenlabs
 pydub
 boto3
-audioop
