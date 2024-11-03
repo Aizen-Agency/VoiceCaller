@@ -288,7 +288,7 @@ async def proxy(client_ws, path):
               # Get response from OpenAI API
                 # Add the transcript to the buffer
             
-            if prompt_count > 1:   
+            if prompt_count > 0:   
                 stop_event.set()
                 
             await client_ws.send(json.dumps({ 
