@@ -297,7 +297,7 @@ async def proxy(client_ws, path):
                 if prompt_count > 1:
                     print(f"stopppinnnnnnngggg   :  {prompt_count}")
                     stop_event.set()
-                    time.sleep(3)
+                    time.sleep(1)
                     stop_event.clear()
                     prompt_count = 1
                     await client_ws.send(json.dumps({ 
