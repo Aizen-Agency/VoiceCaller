@@ -283,6 +283,9 @@ async def proxy(client_ws, path):
                 transcript_buffer.append(transcript)
                 last_update_time = time.monotonic()  # Update the timestamp of the last addition
                 
+            await asyncio.sleep(2)
+            print(f"time duration:  { time.monotonic() - last_update_time}")
+                
             prompt_count += 1
             if prompt_count > 1:
                 print(f"stopppinnnnnnngggg   :  {prompt_count}")
