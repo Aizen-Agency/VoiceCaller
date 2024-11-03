@@ -193,7 +193,7 @@ async def get_openai_response(transcript, streamSid, client_ws):
         )
 
         chunk_buffer = []
-
+        full_response_chunks = []
         # Process the stream and collect chunks
         for chunk in stream:  # Use a regular for loop since stream is not async
             if stop_event.is_set():  # Check if the stop signal has been set
@@ -207,6 +207,7 @@ async def get_openai_response(transcript, streamSid, client_ws):
                 # Check if `combined_chunk` ends with a sentence-ending punctuation mark
                 if re.search(r'[.,!?;:]$', combined_chunk):
                     print(f"Sent chunk: {combined_chunk}")
+                    full_response_chunks.append(combined_chunk)
                     await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
                     chunk_buffer = []  # Reset the buffer
 
@@ -215,13 +216,15 @@ async def get_openai_response(transcript, streamSid, client_ws):
         if chunk_buffer and not stop_event.is_set():
             combined_chunk = ''.join(chunk_buffer)
             print(f"Sent chunk: {combined_chunk}")
+            full_response_chunks.append(combined_chunk)
             await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function for the last chunk
 
         # Append the full response to the conversation history
-        full_response = ''.join(
-            [chunk.choices[0].delta.content for chunk in stream if chunk.choices[0].delta.content is not None]
+        full_response = ' '.join(
+           full_response_chunks
         )
         conversation_history_map[streamSid].append({"role": "assistant", "content": full_response})
+        full_response_chunks.clear()
         return await client_ws.send(json.dumps({ 
             "event": "mark",
             "streamSid": streamSid,
@@ -308,6 +311,8 @@ async def proxy(client_ws, path):
                 print(f"_________  {concatenated_transcript}")
                 openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
                 openai_thread.start()
+                with buffer_lock:
+                    transcript_buffer = []
             
 
             
