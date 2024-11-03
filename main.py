@@ -228,13 +228,13 @@ async def get_openai_response(transcript, streamSid, client_ws):
         conversation_history_map[streamSid].append({"role": "assistant", "content": full_response})
         full_response_chunks.clear()
         stop_event.clear()
-        # return await client_ws.send(json.dumps({ 
-        #     "event": "mark",
-        #     "streamSid": streamSid,
-        #     "mark": {
-        #         "name": "ends"
-        #     }
-        # }))
+        return await client_ws.send(json.dumps({ 
+            "event": "mark",
+            "streamSid": streamSid,
+            "mark": {
+                "name": "ends"
+            }
+        }))
 
     except Exception as e:
         print(f"Error in OpenAI API call: {e}")
@@ -287,8 +287,10 @@ async def proxy(client_ws, path):
             global transcript_buffer, last_update_time
               # Get response from OpenAI API
                 # Add the transcript to the buffer
+            
+            if prompt_count > 1:   
+                stop_event.set()
                 
-            stop_event.set()
             await client_ws.send(json.dumps({ 
                             "event": "clear",
                             "streamSid": streamSid,
@@ -321,6 +323,7 @@ async def proxy(client_ws, path):
                 while stop_event.is_set():
                     print("in set check loop")
                 print(f"_________  {concatenated_transcript}")
+                prompt_count += 1
                 openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
                 openai_thread.start()
                 with buffer_lock:
@@ -356,8 +359,8 @@ async def proxy(client_ws, path):
                                 
                     if data["event"] == "mark": 
                         try: 
-                            # if data['mark']['name'] == "ends":
-                            #     prompt_count -= 1
+                            if data['mark']['name'] == "ends":
+                                prompt_count -= 1
                             print(f"mark : {data['mark']['name']}")
                         except Exception as e:
                             print(e)
