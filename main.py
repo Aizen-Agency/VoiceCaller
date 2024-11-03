@@ -16,10 +16,10 @@ from io import BytesIO
 from pydub import AudioSegment, silence
 import threading
 import queue
-import time
 import re  # Import regex module to detect sentence-ending punctuation
 import boto3
 import audioop
+
 
 
 
@@ -246,7 +246,10 @@ async def proxy(client_ws, path):
     streamSid = ""
     prompt_count = 0
     
-    final_transcript = ""
+    # Initialize global variables for buffering
+    transcript_buffer = []
+    buffer_lock = threading.Lock()
+    last_update_time = None
     
     
     async with deepgram_connect() as deepgram_ws:
@@ -258,15 +261,11 @@ async def proxy(client_ws, path):
         async def deepgram_receiver(deepgram_ws):
             nonlocal audio_cursor
             nonlocal prompt_count
-            nonlocal final_transcript
             async for message in deepgram_ws:
                 try:
                     dg_json = json.loads(message)
                     transcript = dg_json["channel"]["alternatives"][0]["transcript"]
                     print(f"transcript : {transcript}")
-                    final_transcript = final_transcript + " " + transcript
-                    time.sleep(10)
-                    print(f"transcript final : {final_transcript}")
                     if transcript:
                         asyncio.create_task(handle_response(transcript=transcript))
                         
@@ -276,7 +275,10 @@ async def proxy(client_ws, path):
                     continue
 
 
-        async def handle_response(transcript):
+        # Function to process and clear the buffer
+        async def process_buffer():
+            nonlocal transcript_buffer, last_update_time
+            
             nonlocal prompt_count
               # Get response from OpenAI API
             prompt_count += 1
@@ -290,12 +292,57 @@ async def proxy(client_ws, path):
                         "event": "clear",
                         "streamSid": streamSid,
                     }))
+                
+                
+            # Concatenate all transcripts
+            concatenated_transcript = " ".join(transcript_buffer)
+            
+            # Start the OpenAI response function in a new thread
+            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
+            openai_thread.start()
+            
+            # Clear the buffer and reset last update time
+            with buffer_lock:
+                transcript_buffer = []
+            last_update_time = None
+
+
+        # Background task to monitor the buffer and process it if no new transcripts arrive within 2 seconds
+        async def monitor_buffer():
+            nonlocal last_update_time
+
+            while True:
+                await asyncio.sleep(2)  # Wait for 2 seconds to check for new transcripts
+                
+                # Check if 2 seconds have passed since the last update
+                if last_update_time is not None and time.monotonic() - last_update_time >= 2:
+                    with buffer_lock:
+                        if transcript_buffer:  # Only process if there's something in the buffer
+                            await process_buffer()
+                    break  # Exit the loop after processing the buffer
+                
+                
+        # The main handler function for incoming transcripts
+        async def handle_response(transcript):
+            nonlocal transcript_buffer, last_update_time
+
+            # Add the transcript to the buffer
+            with buffer_lock:
+                transcript_buffer.append(transcript)
+                last_update_time = time.monotonic()  # Update the timestamp of the last addition
+            
+            # Check if we need to start the buffer monitor task
+            if not hasattr(handle_response, "monitor_task") or handle_response.monitor_task.done():
+                handle_response.monitor_task = asyncio.create_task(monitor_buffer())
+
+
+        # async def handle_response(transcript):
                   
              
-            print(f"Active threads before creating a new one: {threading.active_count()}")
-            # Start a new thread for the OpenAI response function
-            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid, client_ws)))
-            openai_thread.start()
+        #     print(f"Active threads before creating a new one: {threading.active_count()}")
+        #     # Start a new thread for the OpenAI response function
+        #     openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid, client_ws)))
+        #     openai_thread.start()
 
             
 
