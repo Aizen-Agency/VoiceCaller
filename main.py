@@ -13,7 +13,7 @@ import uuid
 from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
 from io import BytesIO
-from pydub import AudioSegment
+from pydub import AudioSegment, silence
 import threading
 import queue
 import time
@@ -43,12 +43,12 @@ elevenlabsclient = ElevenLabs(
 
 
 def text_to_speech_base64(text: str) -> str:
-    # Calling the text_to_speech conversion API with detailed parameters
+    # Call the Eleven Labs text-to-speech API
     response = elevenlabsclient.text_to_speech.convert(
         voice_id="pMsXgVXv3BLzUgSXRplE",  # Adam pre-made voice
         output_format="mp3_22050_32",
         text=text,
-        model_id="eleven_turbo_v2_5",  # use the turbo model for low latency
+        model_id="eleven_turbo_v2_5",  # Use the turbo model for low latency
         voice_settings=VoiceSettings(
             stability=0.0,
             similarity_boost=1.0,
@@ -57,29 +57,28 @@ def text_to_speech_base64(text: str) -> str:
         ),
     )
 
-    # Collect all chunks of audio data
+    # Collect audio data chunks
     audio_data = BytesIO()
     for chunk in response:
         if chunk:
             audio_data.write(chunk)
-    
-    # Reset the buffer position to the start
-    audio_data.seek(0)
 
-    # Convert to AudioSegment and set frame rate to 8000 Hz with μ-law encoding
+    # Convert MP3 audio data to AudioSegment, set to 8000 Hz, 1 channel, μ-law
+    audio_data.seek(0)
     audio_segment = AudioSegment.from_mp3(audio_data)
     audio_segment = audio_segment.set_frame_rate(8000).set_sample_width(1).set_channels(1)
 
-    # Export audio to a μ-law encoded BytesIO buffer
-    ulaw_buffer = BytesIO()
-    audio_segment.export(ulaw_buffer, format="wav", codec="pcm_mulaw")
+    # Trim silence from beginning and end of audio
+    trimmed_audio = silence.strip_silence(audio_segment, silence_thresh=-50, padding=200)
 
-    # Encode to base64
+    # Export audio as μ-law raw data to a buffer without headers
+    ulaw_buffer = BytesIO()
+    trimmed_audio.export(ulaw_buffer, format="raw", codec="pcm_mulaw")
+
+    # Encode raw audio data in base64
     ulaw_base64 = base64.b64encode(ulaw_buffer.getvalue()).decode("utf-8")
 
-    # Return the base64-encoded string
     return ulaw_base64
-
 
 
 
