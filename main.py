@@ -183,6 +183,8 @@ async def get_openai_response(transcript, streamSid, client_ws):
 
         conversation_history_map[streamSid].append({"role": "user", "content": transcript})
 
+        print(conversation_history_map[streamSid])
+        
         # Create the chat completion stream
         stream = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -283,11 +285,11 @@ async def proxy(client_ws, path):
                 transcript_buffer.append(transcript)
                 last_update_time = time.monotonic()  # Update the timestamp of the last addition
                 
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
             time_duration = time.monotonic() - last_update_time
             print(f"time duration:  { time_duration}  -- {transcript}")
             
-            if time_duration > 2: 
+            if time_duration > 3: 
                 prompt_count += 1
                 if prompt_count > 1:
                     print(f"stopppinnnnnnngggg   :  {prompt_count}")
@@ -303,41 +305,10 @@ async def proxy(client_ws, path):
                 concatenated_transcript = " ".join(transcript_buffer)
                 print(f"Active threads before creating a new one: {threading.active_count()}")
                 # Start a new thread for the OpenAI response function
+                print(f"_________  {concatenated_transcript}")
                 openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
                 openai_thread.start()
             
-            # # Add the transcript to the buffer
-            # with buffer_lock:
-            #     transcript_buffer.append(transcript)
-            #     last_update_time = time.monotonic()  # Update the timestamp of the last addition
-
-            # await asyncio.sleep(2)
-            
-            # if last_update_time is not None and time.monotonic() - last_update_time >= 2:
-            #     with buffer_lock:
-            #         if transcript_buffer:  
-                        
-            #             prompt_count += 1
-            #             if prompt_count > 1:
-            #                 print(f"stopppinnnnnnngggg   :  {prompt_count}")
-            #                 stop_event.set()
-            #                 time.sleep(3)
-            #                 stop_event.clear()
-            #                 prompt_count = 1
-            #                 await client_ws.send(json.dumps({ 
-            #                         "event": "clear",
-            #                         "streamSid": streamSid,
-            #                     }))
-                            
-            #             concatenated_transcript = " ".join(transcript_buffer)
-            #             print(f"Active threads before creating a new one: {threading.active_count()}")
-            #             # Start a new thread for the OpenAI response function
-            #             openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
-            #             openai_thread.start()
-                        
-            #             with buffer_lock:
-            #                 transcript_buffer = []
-            #             last_update_time = None
 
             
 
