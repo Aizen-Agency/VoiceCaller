@@ -46,7 +46,7 @@ elevenlabsclient = ElevenLabs(
 def text_to_speech_base64(text: str) -> str:
     # Call the Eleven Labs text-to-speech API
     response = elevenlabsclient.text_to_speech.convert(
-        voice_id="pMsXgVXv3BLzUgSXRplE",  # Adam pre-made voice
+        voice_id= "Xb7hH8MSUJpSbSDYk0k2", #"pMsXgVXv3BLzUgSXRplE",  # Adam pre-made voice
         output_format="mp3_22050_32",
         text=text,
         model_id="eleven_turbo_v2_5",  # Use the turbo model for low latency
