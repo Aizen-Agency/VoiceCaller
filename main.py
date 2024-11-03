@@ -319,6 +319,7 @@ async def proxy(client_ws, path):
                     with buffer_lock:
                         if transcript_buffer:  # Only process if there's something in the buffer
                             await process_buffer()
+                    print("breaking monitor buffer")
                     break  # Exit the loop after processing the buffer
                 
                 
@@ -335,6 +336,7 @@ async def proxy(client_ws, path):
             if not hasattr(handle_response, "monitor_task") or handle_response.monitor_task.done():
                 handle_response.monitor_task = asyncio.create_task(monitor_buffer())
 
+            print("handle response ends")
 
         # async def handle_response(transcript):
                   
