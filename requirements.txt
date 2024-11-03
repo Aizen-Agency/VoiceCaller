@@ -7,3 +7,4 @@ uuid
 elevenlabs
 pydub
 boto3
+numpy
