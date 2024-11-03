@@ -274,42 +274,14 @@ async def proxy(client_ws, path):
                     print('Was not able to parse Deepgram response as JSON.')
                     continue
 
-
-        # Function to process and clear the buffer
-        async def process_buffer():
-            nonlocal transcript_buffer, last_update_time
             
-            nonlocal prompt_count
-              # Get response from OpenAI API
-            prompt_count += 1
-            if prompt_count > 1:
-                print(f"stopppinnnnnnngggg   :  {prompt_count}")
-                stop_event.set()
-                time.sleep(3)
-                stop_event.clear()
-                prompt_count = 1
-                await client_ws.send(json.dumps({ 
-                        "event": "clear",
-                        "streamSid": streamSid,
-                    }))
-                
-                
-            # Concatenate all transcripts
-            concatenated_transcript = " ".join(transcript_buffer)
-            
-            # Start the OpenAI response function in a new thread
-            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
-            openai_thread.start()
-            
-            # Clear the buffer and reset last update time
-            with buffer_lock:
-                transcript_buffer = []
-            last_update_time = None
 
 
         # Background task to monitor the buffer and process it if no new transcripts arrive within 2 seconds
         async def monitor_buffer():
-            nonlocal last_update_time
+            nonlocal transcript_buffer, last_update_time
+            
+            nonlocal prompt_count
 
             while True:
                 await asyncio.sleep(2)  # Wait for 2 seconds to check for new transcripts
@@ -318,7 +290,31 @@ async def proxy(client_ws, path):
                 if last_update_time is not None and time.monotonic() - last_update_time >= 2:
                     with buffer_lock:
                         if transcript_buffer:  # Only process if there's something in the buffer
-                            process_buffer()
+                            
+                            prompt_count += 1
+                            if prompt_count > 1:
+                                print(f"stopppinnnnnnngggg   :  {prompt_count}")
+                                stop_event.set()
+                                time.sleep(3)
+                                stop_event.clear()
+                                prompt_count = 1
+                                await client_ws.send(json.dumps({ 
+                                        "event": "clear",
+                                        "streamSid": streamSid,
+                                    }))
+                                
+                                
+                            # Concatenate all transcripts
+                            concatenated_transcript = " ".join(transcript_buffer)
+                            
+                            # Start the OpenAI response function in a new thread
+                            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
+                            openai_thread.start()
+                            
+                            # Clear the buffer and reset last update time
+                            with buffer_lock:
+                                transcript_buffer = []
+                            last_update_time = None
                     print("breaking monitor buffer")
                     break  # Exit the loop after processing the buffer
                 
