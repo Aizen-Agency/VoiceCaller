@@ -152,20 +152,21 @@ async def process_chunk(chunk, streamSid, client_ws):
     print(f"processing: {chunk}")
     payload =  text_to_speech_base64(chunk)
     try:
-        await client_ws.send(json.dumps({
-                "event": "media",
-                "streamSid": streamSid,
-                "media": {
-                    "payload": payload
-                }
-            }))
-        await client_ws.send(json.dumps({ 
-                    "event": "mark",
+        if not stop_event.is_set():
+            await client_ws.send(json.dumps({
+                    "event": "media",
                     "streamSid": streamSid,
-                    "mark": {
-                    "name": chunk
+                    "media": {
+                        "payload": payload
                     }
-                    }))
+                }))
+            await client_ws.send(json.dumps({ 
+                        "event": "mark",
+                        "streamSid": streamSid,
+                        "mark": {
+                        "name": chunk
+                        }
+                        }))
     except Exception as e:
                 print("Error sending message: ", e)
                 
@@ -201,15 +202,16 @@ async def get_openai_response(transcript, streamSid, client_ws):
                 break 
             
             if chunk.choices[0].delta.content is not None:
-                chunk_buffer.append(chunk.choices[0].delta.content)
-                combined_chunk = ''.join(chunk_buffer)
-                
-                # Check if `combined_chunk` ends with a sentence-ending punctuation mark
-                if re.search(r'[.,!?;:]$', combined_chunk):
-                    print(f"Sent chunk: {combined_chunk}")
-                    full_response_chunks.append(combined_chunk)
-                    await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
-                    chunk_buffer = []  # Reset the buffer
+                if not stop_event.is_set():
+                    chunk_buffer.append(chunk.choices[0].delta.content)
+                    combined_chunk = ''.join(chunk_buffer)
+                    
+                    # Check if `combined_chunk` ends with a sentence-ending punctuation mark
+                    if re.search(r'[.,!?;:]$', combined_chunk):
+                        print(f"Sent chunk: {combined_chunk}")
+                        full_response_chunks.append(combined_chunk)
+                        await process_chunk(combined_chunk, streamSid, client_ws)  # Call your async function here
+                        chunk_buffer = []  # Reset the buffer
 
         print("___________Came out of for loop____________")
         # After finishing the stream, enqueue any remaining chunks
@@ -296,14 +298,14 @@ async def proxy(client_ws, path):
                 prompt_count += 1
                 if prompt_count > 1:
                     print(f"stopppinnnnnnngggg   :  {prompt_count}")
-                    stop_event.set()
-                    time.sleep(1)
-                    stop_event.clear()
-                    prompt_count = 1
                     await client_ws.send(json.dumps({ 
                             "event": "clear",
                             "streamSid": streamSid,
                         }))
+                    stop_event.set()
+                    time.sleep(1)
+                    stop_event.clear()
+                    prompt_count = 1
                     
                 concatenated_transcript = " ".join(transcript_buffer)
                 print(f"Active threads before creating a new one: {threading.active_count()}")
