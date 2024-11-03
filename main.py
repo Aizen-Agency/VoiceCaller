@@ -321,6 +321,8 @@ async def proxy(client_ws, path):
                 print(f"Active threads before creating a new one: {threading.active_count()}")
                 # Start a new thread for the OpenAI response function
                 print(f"stop event flag:  {stop_event.is_set()}   prompt_count: {prompt_count}")
+                if prompt_count > 0:   
+                    stop_event.set()
                 while stop_event.is_set():
                     print("in set check loop")
                 print(f"_________  {concatenated_transcript}")
