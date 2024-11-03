@@ -279,39 +279,56 @@ async def proxy(client_ws, path):
             global transcript_buffer, last_update_time
               # Get response from OpenAI API
               
-              
-            # Add the transcript to the buffer
-            with buffer_lock:
-                transcript_buffer.append(transcript)
-                last_update_time = time.monotonic()  # Update the timestamp of the last addition
-
-            await asyncio.sleep(2)
+            prompt_count += 1
+            if prompt_count > 1:
+                print(f"stopppinnnnnnngggg   :  {prompt_count}")
+                stop_event.set()
+                time.sleep(3)
+                stop_event.clear()
+                prompt_count = 1
+                await client_ws.send(json.dumps({ 
+                        "event": "clear",
+                        "streamSid": streamSid,
+                    }))
+                
+            # concatenated_transcript = " ".join(transcript_buffer)
+            print(f"Active threads before creating a new one: {threading.active_count()}")
+            # Start a new thread for the OpenAI response function
+            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(transcript, streamSid, client_ws)))
+            openai_thread.start()
             
-            if last_update_time is not None and time.monotonic() - last_update_time >= 2:
-                with buffer_lock:
-                    if transcript_buffer:  
+            # # Add the transcript to the buffer
+            # with buffer_lock:
+            #     transcript_buffer.append(transcript)
+            #     last_update_time = time.monotonic()  # Update the timestamp of the last addition
+
+            # await asyncio.sleep(2)
+            
+            # if last_update_time is not None and time.monotonic() - last_update_time >= 2:
+            #     with buffer_lock:
+            #         if transcript_buffer:  
                         
-                        prompt_count += 1
-                        if prompt_count > 1:
-                            print(f"stopppinnnnnnngggg   :  {prompt_count}")
-                            stop_event.set()
-                            time.sleep(3)
-                            stop_event.clear()
-                            prompt_count = 1
-                            await client_ws.send(json.dumps({ 
-                                    "event": "clear",
-                                    "streamSid": streamSid,
-                                }))
+            #             prompt_count += 1
+            #             if prompt_count > 1:
+            #                 print(f"stopppinnnnnnngggg   :  {prompt_count}")
+            #                 stop_event.set()
+            #                 time.sleep(3)
+            #                 stop_event.clear()
+            #                 prompt_count = 1
+            #                 await client_ws.send(json.dumps({ 
+            #                         "event": "clear",
+            #                         "streamSid": streamSid,
+            #                     }))
                             
-                        concatenated_transcript = " ".join(transcript_buffer)
-                        print(f"Active threads before creating a new one: {threading.active_count()}")
-                        # Start a new thread for the OpenAI response function
-                        openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
-                        openai_thread.start()
+            #             concatenated_transcript = " ".join(transcript_buffer)
+            #             print(f"Active threads before creating a new one: {threading.active_count()}")
+            #             # Start a new thread for the OpenAI response function
+            #             openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
+            #             openai_thread.start()
                         
-                        with buffer_lock:
-                            transcript_buffer = []
-                        last_update_time = None
+            #             with buffer_lock:
+            #                 transcript_buffer = []
+            #             last_update_time = None
 
             
 
