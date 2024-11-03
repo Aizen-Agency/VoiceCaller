@@ -291,7 +291,10 @@ async def proxy(client_ws, path):
             await asyncio.sleep(3)
             time_duration = time.monotonic() - last_update_time
             print(f"time duration:  { time_duration}  -- {transcript}")
-            
+            await client_ws.send(json.dumps({ 
+                            "event": "clear",
+                            "streamSid": streamSid,
+                        }))
             if time_duration > 3: 
                 prompt_count += 1
                 if prompt_count > 1:
