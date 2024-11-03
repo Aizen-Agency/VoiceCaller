@@ -151,7 +151,11 @@ async def process_chunk(chunk, streamSid, client_ws):
     # For example, you might want to perform an I/O operation or a database call
     print(f"processing: {chunk}")
     payload =  text_to_speech_base64(chunk)
+    while stop_event.is_set():
+        await asyncio.sleep(0.5)
+        
     try:
+        stop_event.clear()
         await client_ws.send(json.dumps({
                 "event": "media",
                 "streamSid": streamSid,
@@ -198,6 +202,7 @@ async def get_openai_response(transcript, streamSid, client_ws):
         for chunk in stream:  # Use a regular for loop since stream is not async
             if stop_event.is_set():  # Check if the stop signal has been set
                 print("Stopping OpenAI request processing.")
+                stop_event.clear()
                 break 
             
             if chunk.choices[0].delta.content is not None:
@@ -300,8 +305,6 @@ async def proxy(client_ws, path):
                 if prompt_count > 1:
                     print(f"stopppinnnnnnngggg   :  {prompt_count}")
                     stop_event.set()
-                    time.sleep(3)
-                    stop_event.clear()
                     prompt_count = 1
                     await client_ws.send(json.dumps({ 
                             "event": "clear",
