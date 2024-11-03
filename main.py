@@ -314,7 +314,7 @@ async def proxy(client_ws, path):
                             # Clear the buffer and reset last update time
                             with buffer_lock:
                                 transcript_buffer = []
-                            last_update_time = None
+                            # last_update_time = None
                     print("breaking monitor buffer")
                     break  # Exit the loop after processing the buffer
                 
