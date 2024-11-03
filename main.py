@@ -41,7 +41,6 @@ elevenlabsclient = ElevenLabs(
     api_key=ELEVENLABS_API_KEY,
 )
 
-
 def text_to_speech_base64(text: str) -> str:
     # Call the Eleven Labs text-to-speech API
     response = elevenlabsclient.text_to_speech.convert(
@@ -68,8 +67,18 @@ def text_to_speech_base64(text: str) -> str:
     audio_segment = AudioSegment.from_mp3(audio_data)
     audio_segment = audio_segment.set_frame_rate(8000).set_sample_width(1).set_channels(1)
 
-    # Trim silence from beginning and end of audio
-    trimmed_audio = silence.strip_silence(audio_segment, silence_thresh=-50, padding=200)
+    # Split audio on silence and recombine to remove long pauses
+    chunks = silence.split_on_silence(
+        audio_segment,
+        min_silence_len=500,  # Minimum length of silence in ms to consider as a break
+        silence_thresh=-50,   # Silence threshold in dB
+        keep_silence=200      # Keep 200 ms of silence around each chunk for smooth transitions
+    )
+    
+    # Combine chunks back together
+    trimmed_audio = AudioSegment.empty()
+    for chunk in chunks:
+        trimmed_audio += chunk
 
     # Export audio as μ-law raw data to a buffer without headers
     ulaw_buffer = BytesIO()
@@ -79,7 +88,6 @@ def text_to_speech_base64(text: str) -> str:
     ulaw_base64 = base64.b64encode(ulaw_buffer.getvalue()).decode("utf-8")
 
     return ulaw_base64
-
 
 
 def text_to_speech_base64_poly(text: str) -> str:
