@@ -152,12 +152,7 @@ async def process_chunk(chunk, streamSid, client_ws):
     print(f"processing: {chunk}")
     payload =  text_to_speech_base64(chunk)
     try:
-        if stop_event.is_set():
-            await client_ws.send(json.dumps({ 
-                            "event": "clear",
-                            "streamSid": streamSid,
-                        }))
-        else:
+        if not  stop_event.is_set():
             await client_ws.send(json.dumps({
                     "event": "media",
                     "streamSid": streamSid,
@@ -172,6 +167,12 @@ async def process_chunk(chunk, streamSid, client_ws):
                         "name": chunk
                         }
                         }))
+        else:
+            await client_ws.send(json.dumps({ 
+                            "event": "clear",
+                            "streamSid": streamSid,
+                        }))
+            
     except Exception as e:
                 print("Error sending message: ", e)
                 
@@ -204,6 +205,7 @@ async def get_openai_response(transcript, streamSid, client_ws):
         for chunk in stream:  # Use a regular for loop since stream is not async
             if stop_event.is_set():  # Check if the stop signal has been set
                 print("Stopping OpenAI request processing.")
+                stop_event.clear()
                 break 
             
             if chunk.choices[0].delta.content is not None:
@@ -302,13 +304,11 @@ async def proxy(client_ws, path):
                 prompt_count += 1
                 if prompt_count > 1:
                     print(f"stopppinnnnnnngggg   :  {prompt_count}")
+                    stop_event.set()
                     await client_ws.send(json.dumps({ 
                             "event": "clear",
                             "streamSid": streamSid,
                         }))
-                    stop_event.set()
-                    time.sleep(3)
-                    stop_event.clear()
                     prompt_count = 1
                     
                 concatenated_transcript = " ".join(transcript_buffer)
