@@ -13,7 +13,7 @@ import uuid
 from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
 from io import BytesIO
-from pydub import AudioSegment
+from pydub import AudioSegment, silence
 import threading
 import queue
 import time
