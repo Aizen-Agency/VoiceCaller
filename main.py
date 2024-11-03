@@ -318,7 +318,7 @@ async def proxy(client_ws, path):
                 if last_update_time is not None and time.monotonic() - last_update_time >= 2:
                     with buffer_lock:
                         if transcript_buffer:  # Only process if there's something in the buffer
-                            await process_buffer()
+                            process_buffer()
                     print("breaking monitor buffer")
                     break  # Exit the loop after processing the buffer
                 
