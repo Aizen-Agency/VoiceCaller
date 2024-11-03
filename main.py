@@ -364,6 +364,7 @@ async def proxy(client_ws, path):
                         try: 
                             if data['mark']['name'] == "ends":
                                 prompt_count -= 1
+                                stop_event.clear()
                             print(f"mark : {data['mark']['name']}")
                         except Exception as e:
                             print(e)
