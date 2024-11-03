@@ -284,25 +284,27 @@ async def proxy(client_ws, path):
                 last_update_time = time.monotonic()  # Update the timestamp of the last addition
                 
             await asyncio.sleep(2)
-            print(f"time duration:  { time.monotonic() - last_update_time}")
-                
-            prompt_count += 1
-            if prompt_count > 1:
-                print(f"stopppinnnnnnngggg   :  {prompt_count}")
-                stop_event.set()
-                time.sleep(3)
-                stop_event.clear()
-                prompt_count = 1
-                await client_ws.send(json.dumps({ 
-                        "event": "clear",
-                        "streamSid": streamSid,
-                    }))
-                
-            concatenated_transcript = " ".join(transcript_buffer)
-            print(f"Active threads before creating a new one: {threading.active_count()}")
-            # Start a new thread for the OpenAI response function
-            openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
-            openai_thread.start()
+            time_duration = time.monotonic() - last_update_time
+            print(f"time duration:  { time_duration}  -- {transcript}")
+            
+            if time_duration > 2: 
+                prompt_count += 1
+                if prompt_count > 1:
+                    print(f"stopppinnnnnnngggg   :  {prompt_count}")
+                    stop_event.set()
+                    time.sleep(3)
+                    stop_event.clear()
+                    prompt_count = 1
+                    await client_ws.send(json.dumps({ 
+                            "event": "clear",
+                            "streamSid": streamSid,
+                        }))
+                    
+                concatenated_transcript = " ".join(transcript_buffer)
+                print(f"Active threads before creating a new one: {threading.active_count()}")
+                # Start a new thread for the OpenAI response function
+                openai_thread = threading.Thread(target=lambda: asyncio.run(run_openai_response(concatenated_transcript, streamSid, client_ws)))
+                openai_thread.start()
             
             # # Add the transcript to the buffer
             # with buffer_lock:
