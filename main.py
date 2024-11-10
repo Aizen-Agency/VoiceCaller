@@ -402,13 +402,27 @@ async def proxy(client_ws, path):
 
 #     await asyncio.Future()  # Keep the server running indefinitely
 
+# async def main():
+#     port = int(os.environ.get("PORT", 5000))  # Default to 5000 if PORT is not set
+#     proxy_server = websockets.serve(proxy, '0.0.0.0', port)  # Bind to all interfaces
+#     await proxy_server
+
+#     await asyncio.Future()  # Keep the server running indefinitely
+
+
+# if __name__ == '__main__':
+#     try:
+#         asyncio.run(main())
+#     except KeyboardInterrupt:
+#         print("Server stopped")
+        
 async def main():
     port = int(os.environ.get("PORT", 5000))  # Default to 5000 if PORT is not set
-    proxy_server = websockets.serve(proxy, '0.0.0.0', port)  # Bind to all interfaces
-    await proxy_server
+    proxy_server = await websockets.serve(proxy, '0.0.0.0', port)  # Bind to all interfaces
+    print(f"WebSocket server started on ws://0.0.0.0:{port}")
 
-    await asyncio.Future()  # Keep the server running indefinitely
-
+    # Keep the server running indefinitely
+    await proxy_server.wait_closed()
 
 if __name__ == '__main__':
     try:
