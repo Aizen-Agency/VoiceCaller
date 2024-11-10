@@ -199,7 +199,7 @@ async def get_openai_response(transcript, streamSid, client_ws):
         # Process the stream and collect chunks
         for chunk in stream:  # Use a regular for loop since stream is not async
             if stop_event.is_set():  # Check if the stop signal has been set
-                print("Stopping OpenAI request processing.")
+                print("Stopping OpenAI request processing")
                 break 
             
             if chunk.choices[0].delta.content is not None:
