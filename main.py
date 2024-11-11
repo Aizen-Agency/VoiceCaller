@@ -107,10 +107,10 @@ def text_to_speech_base64_poly(text: str) -> str:
 
     # Request text-to-speech conversion from Polly
     response = polly_client.synthesize_speech(
-        Text=text,
-        VoiceId='Matthew',  # You can use any other Polly voice
-        OutputFormat='mp3',
-        Engine='standard'  # 'neural' engine can also be used if available
+        Text=text.strip(),
+        OutputFormat="mp3",
+        VoiceId="Amy",
+        Engine="generative"
     )
 
     # Read audio data from the response stream
@@ -150,7 +150,7 @@ async def process_chunk(chunk, streamSid, client_ws):
     # Your asynchronous processing logic here
     # For example, you might want to perform an I/O operation or a database call
     print(f"processing: {chunk}")
-    payload =  text_to_speech_base64(chunk)
+    payload =  text_to_speech_base64_poly(chunk)
     try:
         if not stop_event.is_set():
                         
