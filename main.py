@@ -12,6 +12,7 @@ import requests
 import uuid
 from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
+import argparse
 from io import BytesIO
 from pydub import AudioSegment, silence
 import threading
@@ -402,13 +403,17 @@ async def proxy(client_ws, path):
 
 #     await asyncio.Future()  # Keep the server running indefinitely
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Start a websocket server.")
+    parser.add_argument('--port', type=int, default=int(os.environ.get("PORT", 8000)), help="Port to run the server on")
+    return parser.parse_args()
+
 async def main():
-    p = os.getenv("PORT", 8000)
-    print(p)
-    print(type(p))
-    print(type(int(p)))
-    port = int(os.getenv("PORT", 8000))  # Default to 5000 if PORT is not set
-    print(f"port here {port}")
+
+    args = parse_args()
+    port = args.port
+    print(f"Using port: {port}")
+
     proxy_server = await websockets.serve(proxy, '0.0.0.0', port)  # Bind to all interfaces
     print(f"Server started on port {port}")
     
