@@ -403,15 +403,10 @@ async def proxy(client_ws, path):
 
 #     await asyncio.Future()  # Keep the server running indefinitely
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Start a websocket server.")
-    parser.add_argument('--port', type=int, default=int(os.environ.get("PORT", 8000)), help="Port to run the server on")
-    return parser.parse_args()
 
 async def main():
 
-    args = parse_args()
-    port = args.port
+    port= 8000
     print(f"Using port: {port}")
 
     proxy_server = await websockets.serve(proxy, '0.0.0.0', port)  # Bind to all interfaces
