@@ -12,7 +12,6 @@ import requests
 import uuid
 from elevenlabs import VoiceSettings
 from elevenlabs.client import ElevenLabs
-import argparse
 from io import BytesIO
 from pydub import AudioSegment, silence
 import threading
@@ -200,7 +199,7 @@ async def get_openai_response(transcript, streamSid, client_ws):
         # Process the stream and collect chunks
         for chunk in stream:  # Use a regular for loop since stream is not async
             if stop_event.is_set():  # Check if the stop signal has been set
-                print("Stopping OpenAI request processing")
+                print("Stopping OpenAI request processing.")
                 break 
             
             if chunk.choices[0].delta.content is not None:
@@ -403,19 +402,14 @@ async def proxy(client_ws, path):
 
 #     await asyncio.Future()  # Keep the server running indefinitely
 
-
 async def main():
+    port = int(os.environ.get("PORT", 5000))  # Default to 5000 if PORT is not set
+    proxy_server = websockets.serve(proxy, '0.0.0.0', port)  # Bind to all interfaces
+    print(f"server running on port {port}")
+    await proxy_server
 
-    port= 8000
-    print(f"Using port: {port}")
+    await asyncio.Future()  # Keep the server running indefinitely
 
-    proxy_server = await websockets.serve(proxy, '0.0.0.0', port)  # Bind to all interfaces
-    print(f"Server started on port {port}")
-    
-    try:
-        await asyncio.Future()  # Keep the server running indefinitely
-    except asyncio.CancelledError:
-        pass  # Handle cancellation gracefully when shutting down
 
 if __name__ == '__main__':
     try:
