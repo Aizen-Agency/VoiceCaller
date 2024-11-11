@@ -405,7 +405,7 @@ async def proxy(client_ws, path):
 async def main():
     port = int(os.environ.get("PORT", 5000))  # Default to 5000 if PORT is not set
     proxy_server = websockets.serve(proxy, '0.0.0.0', port)  # Bind to all interfaces
-    print(f"server running on port {port}")
+    print(f"server running on port: {port}")
     await proxy_server
 
     await asyncio.Future()  # Keep the server running indefinitely
